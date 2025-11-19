@@ -1,8 +1,35 @@
-import { useState } from 'react';
-import { producerOffers } from '../mockData.js';
+import { useEffect, useState } from 'react';
+import { producerOffers as fallbackOffers } from '../mockData.js';
+import { apiClient } from '../services/apiClient.js';
 
 const ProducerDashboard = () => {
   const [form, setForm] = useState({ title: '', quantity: '', price: '' });
+  const [offers, setOffers] = useState(fallbackOffers);
+  const [status, setStatus] = useState('idle');
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setStatus('loading');
+
+    apiClient
+      .getOffers()
+      .then((data) => {
+        if (!isMounted) return;
+        setOffers(data);
+        setStatus('success');
+        setErrorMessage(null);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setStatus('error');
+        setErrorMessage("Impossible de charger les offres depuis l'API. Les données locales sont affichées.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -21,8 +48,10 @@ const ProducerDashboard = () => {
 
       <div>
         <h3>Vos offres publiées</h3>
+        {status === 'loading' && <p>Chargement des offres...</p>}
+        {status === 'error' && <p className="error">{errorMessage}</p>}
         <ul>
-          {producerOffers.map((offer) => (
+          {offers.map((offer) => (
             <li key={offer.id}>
               <strong>{offer.title}</strong> — {offer.quantity} — {offer.price}
             </li>
