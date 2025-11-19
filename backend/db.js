@@ -27,10 +27,35 @@ const createTables = () => {
       description TEXT,
       lat REAL,
       lng REAL,
+      first_name TEXT,
+      last_name TEXT,
+      phone TEXT,
+      siret TEXT,
+      show_identity INTEGER NOT NULL DEFAULT 0,
+      show_phone INTEGER NOT NULL DEFAULT 0,
+      show_siret INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `).run();
+
+  const ensureColumn = (table, column, definition) => {
+    const hasColumn = db
+      .prepare(`PRAGMA table_info("${table}")`)
+      .all()
+      .some((info) => info.name === column);
+    if (!hasColumn) {
+      db.prepare(`ALTER TABLE "${table}" ADD COLUMN ${definition}`).run();
+    }
+  };
+
+  ensureColumn('producers', 'first_name', 'TEXT');
+  ensureColumn('producers', 'last_name', 'TEXT');
+  ensureColumn('producers', 'phone', 'TEXT');
+  ensureColumn('producers', 'siret', 'TEXT');
+  ensureColumn('producers', 'show_identity', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('producers', 'show_phone', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('producers', 'show_siret', 'INTEGER NOT NULL DEFAULT 0');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS offers (
@@ -58,9 +83,24 @@ const seedDatabase = () => {
   const producerUserId = insertUser.run('producer@example.com', passwordHash, 'producer').lastInsertRowid;
   const secondProducerUserId = insertUser.run('verger@example.com', passwordHash, 'producer').lastInsertRowid;
 
-  const insertProducer = db.prepare(
-    'INSERT INTO producers (user_id, name, city, description, lat, lng) VALUES (?, ?, ?, ?, ?, ?)'
-  );
+  const insertProducer = db.prepare(`
+    INSERT INTO producers (
+      user_id,
+      name,
+      city,
+      description,
+      lat,
+      lng,
+      first_name,
+      last_name,
+      phone,
+      siret,
+      show_identity,
+      show_phone,
+      show_siret
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
   const fermeNordId = insertProducer.run(
     producerUserId,
@@ -68,7 +108,14 @@ const seedDatabase = () => {
     'Lille',
     'Production de pommes et pommes de terre en circuit court.',
     50.6292,
-    3.0573
+    3.0573,
+    'Claire',
+    'Dupont',
+    '+33 3 20 00 00 00',
+    '123 456 789 00017',
+    1,
+    1,
+    0
   ).lastInsertRowid;
   const vergerSudId = insertProducer.run(
     secondProducerUserId,
@@ -76,7 +123,14 @@ const seedDatabase = () => {
     'Avignon',
     'Maraîchage diversifié et herbes aromatiques.',
     43.9493,
-    4.8055
+    4.8055,
+    'Julien',
+    'Martin',
+    '+33 4 90 00 00 00',
+    '987 654 321 00032',
+    1,
+    0,
+    1
   ).lastInsertRowid;
 
   const insertOffer = db.prepare('INSERT INTO offers (producer_id, title, description, city) VALUES (?, ?, ?, ?)');

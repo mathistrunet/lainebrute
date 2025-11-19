@@ -3,7 +3,20 @@ import { api } from '../api.js';
 import CityAutocomplete from '../components/CityAutocomplete.jsx';
 
 const emptyOfferForm = { title: '', description: '', city: '' };
-const emptyProfileForm = { name: '', city: '', description: '', lat: '', lng: '' };
+const emptyProfileForm = {
+  name: '',
+  city: '',
+  description: '',
+  lat: '',
+  lng: '',
+  first_name: '',
+  last_name: '',
+  phone: '',
+  siret: '',
+  show_identity: false,
+  show_phone: false,
+  show_siret: false,
+};
 
 const ProducerDashboard = () => {
   const [session, setSession] = useState(() => api.getCurrentUser());
@@ -43,6 +56,13 @@ const ProducerDashboard = () => {
             description: data.description ?? '',
             lat: data.lat ?? '',
             lng: data.lng ?? '',
+            first_name: data.first_name ?? '',
+            last_name: data.last_name ?? '',
+            phone: data.phone ?? '',
+            siret: data.siret ?? '',
+            show_identity: Boolean(data.show_identity),
+            show_phone: Boolean(data.show_phone),
+            show_siret: Boolean(data.show_siret),
           });
         } else {
           setProfileForm({ ...emptyProfileForm });
@@ -117,12 +137,8 @@ const ProducerDashboard = () => {
   };
 
   const handleProfileChange = (event) => {
-    const { name, value } = event.target;
-    setProfileForm((prev) => ({
-      ...prev,
-      [name]: value,
-      ...(name === 'city' ? { lat: '', lng: '' } : {}),
-    }));
+    const { name, value, type, checked } = event.target;
+    setProfileForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleProfileCitySelect = (selection) => {
@@ -132,6 +148,14 @@ const ProducerDashboard = () => {
       lat: typeof selection.lat === 'number' ? selection.lat.toFixed(6) : prev.lat,
       lng: typeof selection.lng === 'number' ? selection.lng.toFixed(6) : prev.lng,
     }));
+  };
+
+  const normalizeText = (value) => {
+    if (typeof value !== 'string') {
+      return value ?? null;
+    }
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
   };
 
   const handleProfileSubmit = async (event) => {
@@ -144,6 +168,13 @@ const ProducerDashboard = () => {
         description: profileForm.description,
         lat: profileForm.lat ? Number(profileForm.lat) : null,
         lng: profileForm.lng ? Number(profileForm.lng) : null,
+        first_name: normalizeText(profileForm.first_name),
+        last_name: normalizeText(profileForm.last_name),
+        phone: normalizeText(profileForm.phone),
+        siret: normalizeText(profileForm.siret),
+        show_identity: profileForm.show_identity,
+        show_phone: profileForm.show_phone,
+        show_siret: profileForm.show_siret,
       };
       const createdProfile = await api.createProducerProfile(payload);
       setProfile(createdProfile);
@@ -263,9 +294,22 @@ const ProducerDashboard = () => {
           <div>
             <h3>Profil producteur</h3>
             {profile ? (
-              <p>
-                Profil enregistré pour <strong>{profile.name}</strong> ({profile.city || 'Ville non renseignée'})
-              </p>
+              <div>
+                <p>
+                  Profil enregistré pour <strong>{profile.name}</strong> ({profile.city || 'Ville non renseignée'})
+                </p>
+                {(profile.show_identity || profile.show_phone || profile.show_siret) && (
+                  <ul>
+                    {profile.show_identity && (profile.first_name || profile.last_name) && (
+                      <li>
+                        Contact : {[profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Non renseigné'}
+                      </li>
+                    )}
+                    {profile.show_phone && profile.phone && <li>Téléphone : {profile.phone}</li>}
+                    {profile.show_siret && profile.siret && <li>SIRET : {profile.siret}</li>}
+                  </ul>
+                )}
+              </div>
             ) : (
               <p>Vous n'avez pas encore renseigné votre profil producteur.</p>
             )}
@@ -285,6 +329,64 @@ const ProducerDashboard = () => {
                 Description
                 <textarea name="description" value={profileForm.description} onChange={handleProfileChange} />
               </label>
+              <div className="grid-two">
+                <label>
+                  Prénom du contact
+                  <input name="first_name" value={profileForm.first_name} onChange={handleProfileChange} />
+                </label>
+                <label>
+                  Nom du contact
+                  <input name="last_name" value={profileForm.last_name} onChange={handleProfileChange} />
+                </label>
+              </div>
+              <label>
+                Numéro de téléphone
+                <input name="phone" value={profileForm.phone} onChange={handleProfileChange} />
+              </label>
+              <label>
+                Numéro de SIRET
+                <input name="siret" value={profileForm.siret} onChange={handleProfileChange} />
+              </label>
+              <div className="grid-two">
+                <label>
+                  Latitude
+                  <input name="lat" value={profileForm.lat} onChange={handleProfileChange} />
+                </label>
+                <label>
+                  Longitude
+                  <input name="lng" value={profileForm.lng} onChange={handleProfileChange} />
+                </label>
+              </div>
+              <fieldset>
+                <legend>Préférences d'affichage public</legend>
+                <label>
+                  <input
+                    type="checkbox"
+                    name="show_identity"
+                    checked={profileForm.show_identity}
+                    onChange={handleProfileChange}
+                  />
+                  Afficher mon nom et mon prénom sur la carte
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    name="show_phone"
+                    checked={profileForm.show_phone}
+                    onChange={handleProfileChange}
+                  />
+                  Afficher mon numéro de téléphone
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    name="show_siret"
+                    checked={profileForm.show_siret}
+                    onChange={handleProfileChange}
+                  />
+                  Afficher mon numéro de SIRET
+                </label>
+              </fieldset>
               <button type="submit">Enregistrer le profil</button>
             </form>
           </div>
