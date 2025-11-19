@@ -115,13 +115,21 @@ ul {
   background: transparent;
   box-shadow: none;
   border-radius: 0;
+  min-height: 0;
 }
 
 .map-layout {
   position: relative;
   width: 100%;
-  min-height: 540px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.map-layout,
+.map-canvas,
+.map-canvas__inner {
+  height: 100%;
 }
 
 @media (max-width: 768px) {
@@ -131,8 +139,7 @@ ul {
 }
 
 .map-canvas {
-  height: 100%;
-  min-height: inherit;
+  min-height: 0;
   width: 100%;
   position: relative;
   border-radius: 0;
@@ -142,8 +149,7 @@ ul {
 
 .map-canvas__inner {
   width: 100%;
-  height: 100%;
-  min-height: inherit;
+  min-height: 0;
   position: relative;
 }
 
@@ -179,8 +185,31 @@ ul {
   pointer-events: none;
 }
 
-.tile-map__marker {
+.tile-map__marker-wrapper {
   position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  pointer-events: none;
+}
+
+.tile-map__marker-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.25);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile-map__marker {
+  position: relative;
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -191,6 +220,27 @@ ul {
   pointer-events: auto;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+}
+
+.tile-map__marker-wrapper--cluster .tile-map__marker-label {
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+}
+
+.tile-map__marker--cluster {
+  min-width: 30px;
+  min-height: 30px;
+  width: auto;
+  height: auto;
+  padding: 0.35rem;
+  border-radius: 999px;
+  border-width: 3px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tile-map__marker::after {
@@ -231,6 +281,102 @@ ul {
 
 .map-status.error {
   background: rgba(185, 28, 28, 0.95);
+}
+
+.map-filter {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.2);
+  width: min(320px, calc(100% - 3rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  pointer-events: auto;
+}
+
+.map-filter label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.map-filter__controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.map-filter input {
+  flex: 1;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5f5;
+  padding: 0.4rem 0.6rem;
+}
+
+.map-filter__reset {
+  border: none;
+  background: #e11d48;
+  color: white;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-producer-card {
+  position: absolute;
+  left: 1.5rem;
+  bottom: 1.5rem;
+  width: min(360px, calc(100% - 3rem));
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1rem;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: auto;
+}
+
+.map-producer-card h4 {
+  margin: 0.25rem 0;
+}
+
+.map-producer-card__city {
+  margin: 0;
+  color: #475569;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.map-producer-card__products ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+}
+
+.map-producer-card__products li {
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.map-producer-card__products span {
+  display: block;
+  color: #475569;
+}
+
+.map-producer-card button {
+  align-self: flex-start;
+  border: none;
+  background: #15803d;
+  color: white;
+  border-radius: 999px;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .producer-panel {
@@ -321,6 +467,41 @@ ul {
   border: 1px solid #bbf7d0;
 }
 
+.producer-products {
+  margin-top: 0.75rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  border: 1px solid #d9f99d;
+  padding: 0.75rem;
+}
+
+.producer-products h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.producer-products ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.producer-products li {
+  display: flex;
+  flex-direction: column;
+}
+
+.producer-products__name {
+  font-weight: 600;
+}
+
+.producer-products__description {
+  color: #475569;
+  font-size: 0.9rem;
+}
+
 .sidebar-toggle {
   position: absolute;
   top: 50%;
@@ -378,6 +559,23 @@ ul {
   .sidebar-toggle.is-open {
     right: auto;
     left: 50%;
+  }
+
+  .map-filter {
+    position: fixed;
+    top: auto;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(420px, calc(100% - 2rem));
+  }
+
+  .map-producer-card {
+    position: fixed;
+    left: 50%;
+    bottom: 5rem;
+    transform: translateX(-50%);
+    width: min(420px, calc(100% - 2rem));
   }
 }
 
