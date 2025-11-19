@@ -1,43 +1,37 @@
-import { NavLink } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 
-const navItems = [
-  { to: '/', label: 'Carte', end: true, className: 'site-nav__link--map' },
+const links = [
+  { to: '/', label: 'Carte' },
   { to: '/annonces', label: 'Annonces' },
   { to: '/producteur', label: 'Espace producteur' },
   { to: '/admin', label: 'Admin' },
 ];
 
-const Layout = ({ children }) => {
+function Layout() {
+  const location = useLocation();
+
   return (
     <div className="app-shell">
-      <header className="site-header">
-        <div className="site-title" aria-label="Nom du site">
-          lainebrute.fr
-        </div>
-        <nav className="site-nav" aria-label="Navigation principale">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                [
-                  'site-nav__link',
-                  item.className,
-                  isActive ? 'active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-              }
+      <header className="app-header">
+        <div className="brand">Laine Brute</div>
+        <nav className="nav-links">
+          {links.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={location.pathname === link.to ? 'active' : ''}
             >
-              {item.label}
-            </NavLink>
+              {link.label}
+            </Link>
           ))}
         </nav>
       </header>
-      <main>{children}</main>
+      <main className="app-content">
+        <Outlet />
+      </main>
+      <footer className="app-footer">© {new Date().getFullYear()} Collectif Laine Brute</footer>
     </div>
   );
-};
+}
 
 export default Layout;
