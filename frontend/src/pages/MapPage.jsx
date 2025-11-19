@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 
 const DEFAULT_CENTER = [46.7111, 1.7191];
+const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 
 const MapPage = () => {
   const [producers, setProducers] = useState([]);
@@ -9,6 +11,10 @@ const MapPage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedProducerId, setSelectedProducerId] = useState(null);
+  const [leafletReady, setLeafletReady] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.L)
+  );
+  const [leafletError, setLeafletError] = useState(null);
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -76,8 +82,73 @@ const MapPage = () => {
   );
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    if (document.querySelector('link[data-leaflet-style="true"]')) {
+      return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = LEAFLET_CSS_URL;
+    link.dataset.leafletStyle = 'true';
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || leafletReady) {
+      return;
+    }
+
+    let isMounted = true;
+    const scriptId = 'leaflet-cdn-script';
+
+    if (window.L) {
+      setLeafletReady(true);
+      setLeafletError(null);
+      return;
+    }
+
+    const handleLoad = () => {
+      if (!isMounted) {
+        return;
+      }
+      setLeafletReady(true);
+      setLeafletError(null);
+    };
+
+    const handleError = () => {
+      if (!isMounted) {
+        return;
+      }
+      setLeafletError("Impossible de charger la librairie cartographique.");
+    };
+
+    let script = document.getElementById(scriptId);
+    if (script) {
+      script.addEventListener('load', handleLoad);
+      script.addEventListener('error', handleError);
+    } else {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = LEAFLET_JS_URL;
+      script.async = true;
+      script.crossOrigin = '';
+      script.addEventListener('load', handleLoad);
+      script.addEventListener('error', handleError);
+      document.body.appendChild(script);
+    }
+
+    return () => {
+      isMounted = false;
+      script?.removeEventListener('load', handleLoad);
+      script?.removeEventListener('error', handleError);
+    };
+  }, [leafletReady]);
+
+  useEffect(() => {
     const leaflet = typeof window !== 'undefined' ? window.L : null;
-    if (!leaflet || !mapContainerRef.current || mapInstanceRef.current) {
+    if (!leafletReady || !leaflet || !mapContainerRef.current || mapInstanceRef.current) {
       return;
     }
 
@@ -101,13 +172,13 @@ const MapPage = () => {
       markerLayerRef.current = null;
       mapInstanceRef.current = null;
     };
-  }, []);
+  }, [leafletReady]);
 
   useEffect(() => {
     const leaflet = typeof window !== 'undefined' ? window.L : null;
     const map = mapInstanceRef.current;
     const markerLayer = markerLayerRef.current;
-    if (!leaflet || !map || !markerLayer) {
+    if (!leafletReady || !leaflet || !map || !markerLayer) {
       return;
     }
 
@@ -139,7 +210,7 @@ const MapPage = () => {
     } else {
       map.fitBounds(bounds, { padding: [40, 40] });
     }
-  }, [handleProducerSelection, validProducers]);
+  }, [handleProducerSelection, leafletReady, validProducers]);
 
   useEffect(() => {
     if (!sidebarOpen || !selectedProducerId) {
@@ -163,9 +234,17 @@ const MapPage = () => {
             role="img"
             aria-label="Carte interactive des producteurs"
           ></div>
-          {status === 'loading' && <p className="map-status">Chargement des producteurs...</p>}
-          {status === 'error' && <p className="map-status error">{errorMessage}</p>}
-          {status === 'success' && validProducers.length === 0 && (
+          {!leafletReady && !leafletError && (
+            <p className="map-status">Chargement de la carte...</p>
+          )}
+          {leafletError && <p className="map-status error">{leafletError}</p>}
+          {leafletReady && status === 'loading' && (
+            <p className="map-status">Chargement des producteurs...</p>
+          )}
+          {leafletReady && status === 'error' && (
+            <p className="map-status error">{errorMessage}</p>
+          )}
+          {leafletReady && status === 'success' && validProducers.length === 0 && (
             <p className="map-status">Aucun producteur géolocalisé n'est disponible pour le moment.</p>
           )}
         </div>
