@@ -154,20 +154,15 @@ const MapPage = () => {
   const selectedProducer = producers.find((producer) => producer.id === selectedProducerId) || null;
 
   return (
-    <section className="map-section">
-      <div className="map-section__header">
-        <div>
-          <h2>Carte des producteurs</h2>
-          <p>Explorez les exploitations référencées et prenez contact en un clic.</p>
-        </div>
-        <button className="panel-toggle" onClick={() => setSidebarOpen((value) => !value)}>
-          {sidebarOpen ? 'Masquer la liste' : 'Voir la liste des producteurs'}
-        </button>
-      </div>
-
+    <section className="map-page" aria-label="Carte interactive des producteurs">
       <div className="map-layout">
         <div className="map-canvas" aria-live="polite">
-          <div ref={mapContainerRef} className="map-canvas__inner" role="img" aria-label="Carte interactive des producteurs"></div>
+          <div
+            ref={mapContainerRef}
+            className="map-canvas__inner"
+            role="img"
+            aria-label="Carte interactive des producteurs"
+          ></div>
           {status === 'loading' && <p className="map-status">Chargement des producteurs...</p>}
           {status === 'error' && <p className="map-status error">{errorMessage}</p>}
           {status === 'success' && validProducers.length === 0 && (
@@ -175,15 +170,21 @@ const MapPage = () => {
           )}
         </div>
 
+        <button
+          type="button"
+          className={`sidebar-toggle ${sidebarOpen ? 'is-open' : ''}`}
+          onClick={() => setSidebarOpen((value) => !value)}
+          aria-label={sidebarOpen ? 'Masquer la liste des producteurs' : 'Afficher la liste des producteurs'}
+        >
+          <span aria-hidden="true">{sidebarOpen ? '›' : '‹'}</span>
+        </button>
+
         <aside className={`producer-panel ${sidebarOpen ? 'producer-panel--open' : ''}`} aria-live="polite">
           <div className="producer-panel__header">
             <div>
               <h3>Producteurs référencés</h3>
               <p>{producers.length} inscrit(s) sur la plateforme</p>
             </div>
-            <button className="panel-close" onClick={() => setSidebarOpen(false)}>
-              Fermer
-            </button>
           </div>
 
           {status === 'loading' && <p>Chargement des producteurs...</p>}
