@@ -1,0 +1,8 @@
+[
+  { "siret": "12345678900017", "name": "Ferme du Nord" },
+  { "siret": "98765432100032", "name": "Les Jardins Provençaux" },
+  { "siret": "52147896300045", "name": "La Bergerie Atlantique" },
+  { "siret": "74125896300063", "name": "Le Potager des Collines" },
+  { "siret": "36925814700088", "name": "Les Prairies du Rhône" },
+  { "siret": "25814736900029", "name": "Chèvrerie de la Vallée Verte" }
+]

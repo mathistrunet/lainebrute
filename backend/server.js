@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const db = require('./db');
+const knownFarms = require('./data/known-farms.json');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -113,6 +114,25 @@ const adminOffersStmt = db.prepare(`
 `);
 const listTablesStmt = db.prepare(
   "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+);
+
+const normalizeSiret = (value) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(Math.trunc(value)) : '';
+  }
+  if (typeof value === 'string') {
+    const digitsOnly = value.replace(/\D/g, '');
+    return digitsOnly;
+  }
+  return '';
+};
+
+const isValidSiretFormat = (value) => /^\d{14}$/.test(value);
+
+const knownFarmsBySiret = new Map(
+  (Array.isArray(knownFarms) ? knownFarms : [])
+    .map((farm) => [normalizeSiret(farm.siret), farm])
+    .filter(([siret]) => isValidSiretFormat(siret))
 );
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
@@ -312,6 +332,18 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
       return res.status(400).json({ error: "Le nom de l'exploitation est requis." });
     }
 
+    const normalizedSiret = normalizeSiret(siret);
+    if (!normalizedSiret) {
+      return res.status(400).json({ error: 'Le numéro de SIRET est requis pour valider votre exploitation.' });
+    }
+    if (!isValidSiretFormat(normalizedSiret)) {
+      return res.status(400).json({ error: 'Le numéro de SIRET doit contenir 14 chiffres.' });
+    }
+
+    if (!knownFarmsBySiret.has(normalizedSiret)) {
+      return res.status(400).json({ error: "Ce numéro de SIRET n'a pas été trouvé dans notre registre d'exploitations." });
+    }
+
     const existing = findProducerByUserIdStmt.get(req.user.id);
     const payload = [
       name,
@@ -322,7 +354,7 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
       first_name,
       last_name,
       phone,
-      siret,
+      normalizedSiret,
       toVisibilityFlag(show_identity),
       toVisibilityFlag(show_phone),
       toVisibilityFlag(show_siret),

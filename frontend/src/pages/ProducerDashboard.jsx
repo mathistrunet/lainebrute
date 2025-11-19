@@ -158,10 +158,29 @@ const ProducerDashboard = () => {
     return trimmed === '' ? null : trimmed;
   };
 
+  const sanitizeSiretValue = (value) => {
+    if (typeof value === 'number') {
+      return String(Math.trunc(value));
+    }
+    if (typeof value !== 'string') {
+      return '';
+    }
+    return value.replace(/\D/g, '');
+  };
+
   const handleProfileSubmit = async (event) => {
     event.preventDefault();
     resetMessages();
     try {
+      const normalizedSiret = sanitizeSiretValue(profileForm.siret);
+      if (!normalizedSiret) {
+        setErrorMessage('Le numéro de SIRET est obligatoire pour enregistrer votre exploitation.');
+        return;
+      }
+      if (normalizedSiret.length !== 14) {
+        setErrorMessage('Le numéro de SIRET doit contenir exactement 14 chiffres.');
+        return;
+      }
       const payload = {
         name: profileForm.name,
         city: profileForm.city,
@@ -171,7 +190,7 @@ const ProducerDashboard = () => {
         first_name: normalizeText(profileForm.first_name),
         last_name: normalizeText(profileForm.last_name),
         phone: normalizeText(profileForm.phone),
-        siret: normalizeText(profileForm.siret),
+        siret: normalizedSiret,
         show_identity: profileForm.show_identity,
         show_phone: profileForm.show_phone,
         show_siret: profileForm.show_siret,
@@ -345,7 +364,14 @@ const ProducerDashboard = () => {
               </label>
               <label>
                 Numéro de SIRET
-                <input name="siret" value={profileForm.siret} onChange={handleProfileChange} />
+                <input
+                  name="siret"
+                  value={profileForm.siret}
+                  onChange={handleProfileChange}
+                  required
+                  inputMode="numeric"
+                  placeholder="14 chiffres"
+                />
               </label>
               <div className="grid-two">
                 <label>
