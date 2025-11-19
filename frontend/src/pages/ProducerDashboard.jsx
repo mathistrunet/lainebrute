@@ -118,7 +118,11 @@ const ProducerDashboard = () => {
 
   const handleProfileChange = (event) => {
     const { name, value } = event.target;
-    setProfileForm((prev) => ({ ...prev, [name]: value }));
+    setProfileForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'city' ? { lat: '', lng: '' } : {}),
+    }));
   };
 
   const handleProfileCitySelect = (selection) => {
@@ -281,16 +285,6 @@ const ProducerDashboard = () => {
                 Description
                 <textarea name="description" value={profileForm.description} onChange={handleProfileChange} />
               </label>
-              <div className="grid-two">
-                <label>
-                  Latitude
-                  <input name="lat" value={profileForm.lat} onChange={handleProfileChange} />
-                </label>
-                <label>
-                  Longitude
-                  <input name="lng" value={profileForm.lng} onChange={handleProfileChange} />
-                </label>
-              </div>
               <button type="submit">Enregistrer le profil</button>
             </form>
           </div>

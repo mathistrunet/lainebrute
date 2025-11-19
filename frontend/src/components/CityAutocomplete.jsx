@@ -19,9 +19,31 @@ const CityAutocomplete = ({
   const [suggestions, setSuggestions] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
+  const [selectedValue, setSelectedValue] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
+
+  const trimmedValue = typeof value === 'string' ? value.trim() : '';
 
   useEffect(() => {
-    if (!value || value.trim().length < 2) {
+    if (!trimmedValue) {
+      setSelectedValue('');
+      setIsDirty(false);
+      return;
+    }
+    if (!isDirty) {
+      setSelectedValue(trimmedValue);
+    }
+  }, [trimmedValue, isDirty]);
+
+  useEffect(() => {
+    if (!trimmedValue || trimmedValue.length < 2) {
+      setSuggestions([]);
+      setStatus('idle');
+      setError(null);
+      return undefined;
+    }
+
+    if (selectedValue && trimmedValue === selectedValue) {
       setSuggestions([]);
       setStatus('idle');
       setError(null);
@@ -31,7 +53,7 @@ const CityAutocomplete = ({
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       const params = new URLSearchParams({
-        nom: value.trim(),
+        nom: trimmedValue,
         fields: 'nom,code,codesPostaux,centre,departement',
         limit: '8',
         boost: 'population',
@@ -61,7 +83,17 @@ const CityAutocomplete = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [value]);
+  }, [trimmedValue, selectedValue]);
+
+  const handleInputChange = (event) => {
+    if (selectedValue) {
+      setSelectedValue('');
+    }
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+    onChange?.(event);
+  };
 
   const handleSelect = (city) => {
     const lat = city?.centre?.coordinates?.[1] ?? null;
@@ -75,7 +107,11 @@ const CityAutocomplete = ({
       raw: city,
     };
     onSelect?.(formatted);
+    setIsDirty(false);
+    setSelectedValue(formatted.label.trim());
     setSuggestions([]);
+    setStatus('idle');
+    setError(null);
   };
 
   return (
@@ -87,7 +123,7 @@ const CityAutocomplete = ({
           name={name}
           value={value}
           placeholder={placeholder}
-          onChange={onChange}
+          onChange={handleInputChange}
           autoComplete="off"
         />
       </label>
