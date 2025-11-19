@@ -74,6 +74,8 @@ export class SimpleMap {
     this.height = 0;
     this.tileCache = new Map();
     this.markerCache = new Map();
+    this.rawMarkers = [];
+    this.activeMarkerId = null;
     this.renderFrame = null;
     this.pendingFit = null;
     this.onMarkerSelect = null;
@@ -191,46 +193,10 @@ export class SimpleMap {
 
   setMarkers(markers, options = {}) {
     this.onMarkerSelect = typeof options.onMarkerSelect === 'function' ? options.onMarkerSelect : null;
-    const activeId = options.activeId ?? null;
-    const seenKeys = new Set();
-
-    (markers || []).forEach((marker) => {
-      if (!Number.isFinite(marker?.lat) || !Number.isFinite(marker?.lng)) {
-        return;
-      }
-      const key = String(marker.id ?? `${marker.lat}:${marker.lng}`);
-      seenKeys.add(key);
-      let entry = this.markerCache.get(key);
-      if (!entry) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'tile-map__marker';
-        entry = { el: button, marker: { ...marker } };
-        button.addEventListener('click', () => {
-          if (this.onMarkerSelect) {
-            this.onMarkerSelect(entry.marker);
-          }
-        });
-        this.markerCache.set(key, entry);
-        this.markersPane.appendChild(button);
-      }
-      entry.marker = { ...marker };
-      entry.el.title = marker.title ?? marker.name ?? 'Producteur';
-      const ariaLabelParts = [marker.name ?? marker.title ?? 'Producteur'];
-      if (marker.city) {
-        ariaLabelParts.push(`à ${marker.city}`);
-      }
-      entry.el.setAttribute('aria-label', ariaLabelParts.join(' '));
-      entry.el.classList.toggle('is-active', activeId !== null && marker.id === activeId);
-    });
-
-    Array.from(this.markerCache.entries()).forEach(([key, entry]) => {
-      if (!seenKeys.has(key)) {
-        entry.el.remove();
-        this.markerCache.delete(key);
-      }
-    });
-
+    this.activeMarkerId = options.activeId ?? null;
+    this.rawMarkers = Array.isArray(markers)
+      ? markers.filter((marker) => Number.isFinite(marker?.lat) && Number.isFinite(marker?.lng))
+      : [];
     this.scheduleRender();
   }
 
@@ -327,12 +293,138 @@ export class SimpleMap {
     if (!this.topLeft) {
       return;
     }
-    this.markerCache.forEach((entry) => {
-      const marker = entry.marker;
-      const point = project(marker.lat, marker.lng, this.zoom);
+    const clusters = this.buildClusters();
+    const seenKeys = new Set();
+
+    clusters.forEach((cluster) => {
+      seenKeys.add(cluster.key);
+      let entry = this.markerCache.get(cluster.key);
+      if (!entry) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tile-map__marker-wrapper';
+        const label = document.createElement('span');
+        label.className = 'tile-map__marker-label';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tile-map__marker';
+        wrapper.append(label, button);
+        this.markerCache.set(cluster.key, { el: wrapper, labelEl: label, buttonEl: button });
+        this.markersPane.appendChild(wrapper);
+      }
+
+      const entryNode = this.markerCache.get(cluster.key);
+      const point = project(cluster.lat, cluster.lng, this.zoom);
       const left = point.x - this.topLeft.x;
       const top = point.y - this.topLeft.y;
-      entry.el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px) translate(-50%, -100%)`;
+      entryNode.el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px) translate(-50%, -100%)`;
+
+      if (cluster.isCluster) {
+        entryNode.el.classList.add('tile-map__marker-wrapper--cluster');
+        entryNode.labelEl.textContent = `${cluster.count} producteurs`;
+        entryNode.buttonEl.textContent = String(cluster.count);
+        entryNode.buttonEl.classList.add('tile-map__marker--cluster');
+        entryNode.buttonEl.classList.remove('is-active');
+        entryNode.buttonEl.setAttribute('aria-label', `${cluster.count} producteurs regroupés`);
+        entryNode.buttonEl.title = `${cluster.count} producteurs regroupés`;
+        entryNode.buttonEl.onclick = () => {
+          const nextZoom = Math.min(this.options.maxZoom, cluster.zoomTarget ?? this.zoom + 1);
+          this.flyTo([cluster.lat, cluster.lng], nextZoom);
+        };
+      } else {
+        entryNode.el.classList.remove('tile-map__marker-wrapper--cluster');
+        entryNode.buttonEl.classList.remove('tile-map__marker--cluster');
+        entryNode.buttonEl.textContent = '';
+        entryNode.labelEl.textContent = cluster.marker.name ?? cluster.marker.title ?? 'Producteur';
+        const ariaLabelParts = [entryNode.labelEl.textContent];
+        if (cluster.marker.city) {
+          ariaLabelParts.push(`à ${cluster.marker.city}`);
+        }
+        entryNode.buttonEl.setAttribute('aria-label', ariaLabelParts.join(' '));
+        entryNode.buttonEl.title = ariaLabelParts.join(' ');
+        entryNode.buttonEl.onclick = () => {
+          if (this.onMarkerSelect) {
+            this.onMarkerSelect(cluster.marker);
+          }
+        };
+        entryNode.buttonEl.classList.toggle(
+          'is-active',
+          this.activeMarkerId !== null && cluster.marker.id === this.activeMarkerId
+        );
+      }
+    });
+
+    Array.from(this.markerCache.keys()).forEach((key) => {
+      if (!seenKeys.has(key)) {
+        const node = this.markerCache.get(key);
+        node.el.remove();
+        this.markerCache.delete(key);
+      }
+    });
+  }
+
+  getClusterThreshold() {
+    const maxRadius = 120;
+    const minRadius = 36;
+    const zoomRange = Math.max(1, this.options.maxZoom - this.options.minZoom);
+    const relativeZoom = Math.max(0, Math.min(zoomRange, this.zoom - this.options.minZoom));
+    const factor = 1 - relativeZoom / zoomRange;
+    return Math.round(minRadius + (maxRadius - minRadius) * factor);
+  }
+
+  buildClusters() {
+    if (!this.rawMarkers.length) {
+      return [];
+    }
+    const threshold = this.getClusterThreshold();
+    const thresholdSq = threshold * threshold;
+    const clusters = [];
+
+    this.rawMarkers.forEach((marker) => {
+      const point = project(marker.lat, marker.lng, this.zoom);
+      let target = null;
+      for (const cluster of clusters) {
+        const dx = point.x - cluster.point.x;
+        const dy = point.y - cluster.point.y;
+        if (dx * dx + dy * dy <= thresholdSq) {
+          target = cluster;
+          break;
+        }
+      }
+      if (target) {
+        target.point.x = (target.point.x * target.count + point.x) / (target.count + 1);
+        target.point.y = (target.point.y * target.count + point.y) / (target.count + 1);
+        target.count += 1;
+        target.members.push(marker);
+      } else {
+        clusters.push({ point: { ...point }, count: 1, members: [marker] });
+      }
+    });
+
+    return clusters.map((cluster) => {
+      const latLng = unproject(cluster.point.x, cluster.point.y, this.zoom);
+      if (cluster.count === 1) {
+        const marker = cluster.members[0];
+        return {
+          key: `marker:${marker.id ?? `${marker.lat}:${marker.lng}`}`,
+          isCluster: false,
+          lat: marker.lat,
+          lng: marker.lng,
+          marker,
+        };
+      }
+      const key = `cluster:${cluster.members
+        .map((member) => member.id ?? `${member.lat}:${member.lng}`)
+        .sort()
+        .join('|')}`;
+      return {
+        key,
+        isCluster: true,
+        count: cluster.count,
+        lat: latLng.lat,
+        lng: latLng.lng,
+        zoomTarget: this.zoom + 1,
+        markers: cluster.members,
+      };
     });
   }
 
