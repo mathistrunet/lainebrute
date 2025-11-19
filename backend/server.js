@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const db = require('./db');
+const officialSirets = require('./official-sirets.json');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -27,6 +28,7 @@ const listProducersStmt = db.prepare(`
   ORDER BY name ASC
 `);
 const findProducerByUserIdStmt = db.prepare('SELECT * FROM producers WHERE user_id = ?');
+const findProducerBySiretStmt = db.prepare('SELECT * FROM producers WHERE siret = ?');
 const insertProducerStmt = db.prepare(`
   INSERT INTO producers (
     user_id,
@@ -117,6 +119,24 @@ const listTablesStmt = db.prepare(
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
 
+const normalizeSiret = (value) => {
+  if (typeof value === 'string') {
+    return value.replace(/\D/g, '');
+  }
+  if (typeof value === 'number') {
+    return String(value).replace(/\D/g, '');
+  }
+  return '';
+};
+
+const isValidSiretFormat = (value) => /^\d{14}$/.test(value);
+
+const knownSirets = new Map(
+  officialSirets
+    .map((farm) => [normalizeSiret(farm.siret), farm])
+    .filter(([siret]) => Boolean(siret))
+);
+
 const toOfferPayload = (row) => ({
   id: row.id,
   title: row.title,
@@ -140,6 +160,17 @@ const toOfferPayload = (row) => ({
     }),
   },
 });
+
+const withSiretVerification = (producer) => {
+  if (!producer) {
+    return null;
+  }
+  const normalized = normalizeSiret(producer.siret);
+  return {
+    ...producer,
+    verified_farm: normalized ? knownSirets.get(normalized) ?? null : null,
+  };
+};
 
 const sanitizeCoordinate = (value) => {
   if (typeof value === 'number') return value;
@@ -285,7 +316,7 @@ app.get('/api/producers', (req, res) => {
 app.get('/api/my-producer', authenticateToken, requireProducer, (req, res) => {
   try {
     const producer = findProducerByUserIdStmt.get(req.user.id) ?? null;
-    res.json({ data: producer });
+    res.json({ data: withSiretVerification(producer) });
   } catch (error) {
     console.error('Erreur my-producer', error);
     res.status(500).json({ error: 'Impossible de récupérer le profil producteur.' });
@@ -312,7 +343,26 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
       return res.status(400).json({ error: "Le nom de l'exploitation est requis." });
     }
 
+    const normalizedSiret = normalizeSiret(siret);
+    if (!normalizedSiret) {
+      return res.status(400).json({ error: 'Le numéro de SIRET est requis.' });
+    }
+    if (!isValidSiretFormat(normalizedSiret)) {
+      return res.status(400).json({ error: 'Le numéro de SIRET doit contenir exactement 14 chiffres.' });
+    }
+
+    if (!knownSirets.has(normalizedSiret)) {
+      return res.status(400).json({
+        error: "Numéro de SIRET introuvable dans le registre des exploitations partenaires. Merci de vérifier vos informations.",
+      });
+    }
+
     const existing = findProducerByUserIdStmt.get(req.user.id);
+    const siretOwner = findProducerBySiretStmt.get(normalizedSiret);
+    if (siretOwner && (!existing || siretOwner.id !== existing.id)) {
+      return res.status(400).json({ error: 'Ce numéro de SIRET est déjà utilisé par un autre compte.' });
+    }
+
     const payload = [
       name,
       city,
@@ -322,7 +372,7 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
       first_name,
       last_name,
       phone,
-      siret,
+      normalizedSiret,
       toVisibilityFlag(show_identity),
       toVisibilityFlag(show_phone),
       toVisibilityFlag(show_siret),
@@ -331,12 +381,12 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
     if (existing) {
       updateProducerStmt.run(...payload, existing.id);
       const updated = findProducerByUserIdStmt.get(req.user.id);
-      return res.json({ data: updated });
+      return res.json({ data: withSiretVerification(updated) });
     }
 
     insertProducerStmt.run(req.user.id, ...payload);
     const created = findProducerByUserIdStmt.get(req.user.id);
-    return res.status(201).json({ data: created });
+    return res.status(201).json({ data: withSiretVerification(created) });
   } catch (error) {
     console.error('Erreur création producteur', error);
     res.status(500).json({ error: 'Impossible de sauvegarder le producteur.' });
