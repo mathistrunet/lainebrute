@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import CityAutocomplete from '../components/CityAutocomplete.jsx';
 
 const emptyOfferForm = { title: '', description: '', city: '' };
 const emptyProfileForm = { name: '', city: '', description: '', lat: '', lng: '' };
@@ -118,6 +119,15 @@ const ProducerDashboard = () => {
     setProfileForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleProfileCitySelect = (selection) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      city: selection.label,
+      lat: typeof selection.lat === 'number' ? selection.lat.toFixed(6) : prev.lat,
+      lng: typeof selection.lng === 'number' ? selection.lng.toFixed(6) : prev.lng,
+    }));
+  };
+
   const handleProfileSubmit = async (event) => {
     event.preventDefault();
     resetMessages();
@@ -219,10 +229,13 @@ const ProducerDashboard = () => {
                 Nom de l'exploitation
                 <input name="name" value={profileForm.name} onChange={handleProfileChange} required />
               </label>
-              <label>
-                Ville
-                <input name="city" value={profileForm.city} onChange={handleProfileChange} />
-              </label>
+              <CityAutocomplete
+                label="Ville"
+                name="city"
+                value={profileForm.city}
+                onChange={handleProfileChange}
+                onSelect={handleProfileCitySelect}
+              />
               <label>
                 Description
                 <textarea name="description" value={profileForm.description} onChange={handleProfileChange} />
@@ -264,10 +277,15 @@ const ProducerDashboard = () => {
                 Titre de l'offre
                 <input name="title" value={offerForm.title} onChange={handleOfferChange} required />
               </label>
-              <label>
-                Ville ou zone de livraison
-                <input name="city" value={offerForm.city} onChange={handleOfferChange} />
-              </label>
+              <CityAutocomplete
+                label="Ville ou zone de livraison"
+                name="city"
+                value={offerForm.city}
+                onChange={handleOfferChange}
+                onSelect={(selection) =>
+                  setOfferForm((prev) => ({ ...prev, city: selection.label }))
+                }
+              />
               <label>
                 Description
                 <textarea name="description" value={offerForm.description} onChange={handleOfferChange} />
