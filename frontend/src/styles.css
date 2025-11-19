@@ -374,3 +374,46 @@ button:hover {
   background: #ecfdf5;
   border: 1px solid #bbf7d0;
 }
+
+.admin-table {
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.admin-table h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.admin-table__scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5f5;
+  background: #f8fafc;
+}
+
+.admin-table table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+.admin-table th,
+.admin-table td {
+  border: 1px solid #cbd5f5;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.admin-table th {
+  background: #e0f2fe;
+  font-weight: 700;
+}
+
+.admin-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}

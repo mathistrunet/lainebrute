@@ -63,6 +63,11 @@ const adminOffersStmt = db.prepare(`
   JOIN users u ON u.id = p.user_id
   ORDER BY o.created_at DESC
 `);
+const listTablesStmt = db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+);
+
+const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
 
 const toOfferPayload = (row) => ({
   id: row.id,
@@ -318,6 +323,22 @@ app.get('/api/admin/offers', authenticateToken, requireAdmin, (req, res) => {
   } catch (error) {
     console.error('Erreur admin offers', error);
     res.status(500).json({ error: 'Impossible de récupérer les offres.' });
+  }
+});
+
+app.get('/api/admin/database', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const tables = listTablesStmt.all().map(({ name }) => {
+      const safeName = escapeIdentifier(name);
+      const columnsInfo = db.prepare(`PRAGMA table_info("${safeName}")`).all();
+      const columns = columnsInfo.map((column) => column.name);
+      const rows = db.prepare(`SELECT * FROM "${safeName}"`).all();
+      return { name, columns, rows };
+    });
+    res.json({ data: tables });
+  } catch (error) {
+    console.error('Erreur admin database', error);
+    res.status(500).json({ error: 'Impossible de récupérer la base de données.' });
   }
 });
 

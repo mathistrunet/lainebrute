@@ -9,6 +9,7 @@ const AdminDashboard = () => {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [databaseTables, setDatabaseTables] = useState([]);
 
   const isAdmin = session?.role === 'admin';
 
@@ -26,15 +27,17 @@ const AdminDashboard = () => {
     if (!isAdmin) {
       setUsers([]);
       setOffers([]);
+      setDatabaseTables([]);
       setStatus('idle');
       return;
     }
 
     setStatus('loading');
-    Promise.all([api.getAdminUsers(), api.getAdminOffers()])
-      .then(([usersResponse, offersResponse]) => {
+    Promise.all([api.getAdminUsers(), api.getAdminOffers(), api.getAdminDatabase()])
+      .then(([usersResponse, offersResponse, databaseResponse]) => {
         setUsers(Array.isArray(usersResponse) ? usersResponse : []);
         setOffers(Array.isArray(offersResponse) ? offersResponse : []);
+        setDatabaseTables(Array.isArray(databaseResponse) ? databaseResponse : []);
         setStatus('success');
         setErrorMessage(null);
       })
@@ -78,6 +81,7 @@ const AdminDashboard = () => {
     setSession(null);
     setUsers([]);
     setOffers([]);
+    setDatabaseTables([]);
     setStatus('idle');
     setMessage('Déconnexion effectuée.');
   };
@@ -90,6 +94,16 @@ const AdminDashboard = () => {
         setOffers((prev) => prev.filter((offer) => offer.id !== offerId));
       })
       .catch((error) => setErrorMessage(error.message));
+  };
+
+  const formatCellValue = (value) => {
+    if (value === null || value === undefined) {
+      return '—';
+    }
+    if (typeof value === 'string' && value.length > 160) {
+      return `${value.slice(0, 157)}…`;
+    }
+    return String(value);
   };
 
   return (
@@ -175,6 +189,51 @@ const AdminDashboard = () => {
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div>
+            <h3>Base de données complète</h3>
+            <p>Visualisez chaque table SQLite comme dans un tableur pour suivre la plateforme.</p>
+            {databaseTables.length === 0 && status === 'success' && (
+              <p>Aucune table n'a encore été détectée.</p>
+            )}
+            {databaseTables.map((table) => {
+              const rows = Array.isArray(table.rows) ? table.rows : [];
+              const columns = table.columns ?? (rows?.[0] ? Object.keys(rows[0]) : []);
+              return (
+                <div key={table.name} className="admin-table">
+                  <h4>Table {table.name}</h4>
+                  {columns.length === 0 ? (
+                    <p>Structure inconnue.</p>
+                  ) : rows.length === 0 ? (
+                    <p>Aucune donnée enregistrée.</p>
+                  ) : (
+                    <div className="admin-table__scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            {columns.map((column) => (
+                              <th key={`${table.name}-${column}`}>{column}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, index) => (
+                            <tr key={row.id ?? `${table.name}-${index}`}>
+                              {columns.map((column) => (
+                                <td key={`${table.name}-${column}-${row.id ?? index}`}>
+                                  {formatCellValue(row[column])}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

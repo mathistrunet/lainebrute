@@ -113,4 +113,5 @@ export const api = {
   deleteOffer: (offerId) => request(`/offers/${offerId}`, { method: 'DELETE' }),
   getAdminUsers: () => request('/admin/users'),
   getAdminOffers: () => request('/admin/offers'),
+  getAdminDatabase: () => request('/admin/database'),
 };
