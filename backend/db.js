@@ -5,6 +5,16 @@ const Database = require('better-sqlite3');
 const dbFile = path.join(__dirname, 'database.sqlite');
 const db = new Database(dbFile);
 
+const normalizeSiretValue = (value) => {
+  if (typeof value === 'string') {
+    return value.replace(/\D/g, '');
+  }
+  if (typeof value === 'number') {
+    return String(value).replace(/\D/g, '');
+  }
+  return '';
+};
+
 db.pragma('foreign_keys = ON');
 
 const createTables = () => {
@@ -70,6 +80,17 @@ const createTables = () => {
   `).run();
 };
 
+const normalizeStoredSirets = () => {
+  const rows = db.prepare('SELECT id, siret FROM producers WHERE siret IS NOT NULL').all();
+  const updateStmt = db.prepare('UPDATE producers SET siret = ? WHERE id = ?');
+  rows.forEach((producer) => {
+    const normalized = normalizeSiretValue(producer.siret);
+    if (normalized && normalized !== producer.siret) {
+      updateStmt.run(normalized, producer.id);
+    }
+  });
+};
+
 const seedDatabase = () => {
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount > 0) {
@@ -112,7 +133,7 @@ const seedDatabase = () => {
     'Claire',
     'Dupont',
     '+33 3 20 00 00 00',
-    '123 456 789 00017',
+    '12345678900017',
     1,
     1,
     0
@@ -127,7 +148,7 @@ const seedDatabase = () => {
     'Julien',
     'Martin',
     '+33 4 90 00 00 00',
-    '987 654 321 00032',
+    '98765432100032',
     1,
     0,
     1
@@ -149,6 +170,7 @@ const seedDatabase = () => {
 };
 
 createTables();
+normalizeStoredSirets();
 seedDatabase();
 
 module.exports = db;
