@@ -10,6 +10,8 @@ const ProducerDashboard = () => {
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [profileForm, setProfileForm] = useState({ ...emptyProfileForm });
   const [offerForm, setOfferForm] = useState({ ...emptyOfferForm });
+  const [editingOfferId, setEditingOfferId] = useState(null);
+  const [editingOfferForm, setEditingOfferForm] = useState({ ...emptyOfferForm });
   const [offers, setOffers] = useState([]);
   const [profile, setProfile] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -152,6 +154,11 @@ const ProducerDashboard = () => {
     setOfferForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleEditingOfferChange = (event) => {
+    const { name, value } = event.target;
+    setEditingOfferForm((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleOfferSubmit = async (event) => {
     event.preventDefault();
     resetMessages();
@@ -164,6 +171,40 @@ const ProducerDashboard = () => {
       setOffers((prev) => [newOffer, ...prev]);
       setOfferForm({ ...emptyOfferForm });
       setMessage('Offre créée avec succès.');
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  };
+
+  const handleStartEditingOffer = (offer) => {
+    setEditingOfferId(offer.id);
+    setEditingOfferForm({
+      title: offer.title ?? '',
+      description: offer.description ?? '',
+      city: offer.city ?? '',
+    });
+  };
+
+  const handleCancelEditingOffer = () => {
+    setEditingOfferId(null);
+    setEditingOfferForm({ ...emptyOfferForm });
+  };
+
+  const handleUpdateOffer = async (event) => {
+    event.preventDefault();
+    if (!editingOfferId) {
+      return;
+    }
+    resetMessages();
+    try {
+      const updatedOffer = await api.updateOffer(editingOfferId, {
+        title: editingOfferForm.title,
+        description: editingOfferForm.description,
+        city: editingOfferForm.city,
+      });
+      setOffers((prev) => prev.map((offer) => (offer.id === updatedOffer.id ? updatedOffer : offer)));
+      setMessage('Offre mise à jour.');
+      handleCancelEditingOffer();
     } catch (error) {
       setErrorMessage(error.message);
     }
@@ -262,9 +303,53 @@ const ProducerDashboard = () => {
             <ul>
               {offers.map((offer) => (
                 <li key={offer.id}>
-                  <strong>{offer.title}</strong> — {offer.city || 'Ville non renseignée'}
-                  {offer.description && <div>{offer.description}</div>}
-                  <small>Publiée le {new Date(offer.created_at).toLocaleDateString('fr-FR')}</small>
+                  {editingOfferId === offer.id ? (
+                    <form onSubmit={handleUpdateOffer} className="offer-edit-form">
+                      <label>
+                        Titre de l'offre
+                        <input
+                          name="title"
+                          value={editingOfferForm.title}
+                          onChange={handleEditingOfferChange}
+                          required
+                        />
+                      </label>
+                      <CityAutocomplete
+                        label="Ville ou zone de livraison"
+                        name="city"
+                        value={editingOfferForm.city}
+                        onChange={handleEditingOfferChange}
+                        onSelect={(selection) =>
+                          setEditingOfferForm((prev) => ({ ...prev, city: selection.label }))
+                        }
+                      />
+                      <label>
+                        Description
+                        <textarea
+                          name="description"
+                          value={editingOfferForm.description}
+                          onChange={handleEditingOfferChange}
+                        />
+                      </label>
+                      <div className="actions">
+                        <button type="submit">Enregistrer</button>
+                        <button type="button" onClick={handleCancelEditingOffer}>
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <strong>{offer.title}</strong> — {offer.city || 'Ville non renseignée'}
+                      {offer.description && <div>{offer.description}</div>}
+                      <small>Publiée le {new Date(offer.created_at).toLocaleDateString('fr-FR')}</small>
+                      <div className="actions">
+                        <button type="button" onClick={() => handleStartEditingOffer(offer)}>
+                          Modifier
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

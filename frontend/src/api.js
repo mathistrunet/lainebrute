@@ -110,6 +110,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  updateOffer: (offerId, body) =>
+    request(`/offers/${offerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
   deleteOffer: (offerId) => request(`/offers/${offerId}`, { method: 'DELETE' }),
   getAdminUsers: () => request('/admin/users'),
   getAdminOffers: () => request('/admin/offers'),
