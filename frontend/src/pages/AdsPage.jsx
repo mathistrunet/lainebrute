@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ads as fallbackAds, producers as fallbackProducers } from '../mockData.js';
-import { apiClient } from '../services/apiClient.js';
+import { useEffect, useState } from 'react';
+import { api } from '../api.js';
 
 const AdsPage = () => {
-  const [adItems, setAdItems] = useState(fallbackAds);
-  const [producerItems, setProducerItems] = useState(fallbackProducers);
+  const [offers, setOffers] = useState([]);
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
 
@@ -12,18 +10,19 @@ const AdsPage = () => {
     let isMounted = true;
     setStatus('loading');
 
-    Promise.all([apiClient.getAds(), apiClient.getProducers()])
-      .then(([adsResponse, producersResponse]) => {
+    api
+      .getOffers()
+      .then((data) => {
         if (!isMounted) return;
-        setAdItems(adsResponse);
-        setProducerItems(producersResponse);
+        setOffers(Array.isArray(data) ? data : []);
         setStatus('success');
         setErrorMessage(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted) return;
+        setOffers([]);
         setStatus('error');
-        setErrorMessage("Impossible de charger les annonces depuis l'API. Les données locales sont affichées.");
+        setErrorMessage(error.message || "Impossible de charger les annonces.");
       });
 
     return () => {
@@ -31,22 +30,24 @@ const AdsPage = () => {
     };
   }, []);
 
-  const producerMap = useMemo(
-    () => Object.fromEntries(producerItems.map((producer) => [producer.id, producer])),
-    [producerItems]
-  );
-
   return (
     <section>
       <h2>Annonces</h2>
-      <p>Retrouvez toutes les offres et demandes publiées sur la plateforme.</p>
+      <p>Retrouvez toutes les offres publiées par les producteurs inscrits.</p>
       {status === 'loading' && <p>Chargement des annonces...</p>}
       {status === 'error' && <p className="error">{errorMessage}</p>}
+      {offers.length === 0 && status === 'success' && <p>Aucune offre disponible pour le moment.</p>}
       <ul>
-        {adItems.map((ad) => (
-          <li key={ad.id}>
-            <strong>{ad.title}</strong> — {ad.type.toUpperCase()}<br />
-            Producteur : {producerMap[ad.producerId]?.name || 'Inconnu'} ({ad.city})
+        {offers.map((offer) => (
+          <li key={offer.id}>
+            <strong>{offer.title}</strong> — {offer.city || 'Ville non renseignée'}
+            <br />
+            {offer.description && <span>{offer.description}</span>}
+            <div>
+              Producteur : {offer.producer?.name || 'Inconnu'}{' '}
+              {offer.producer?.city ? `(${offer.producer.city})` : ''}
+            </div>
+            <small>Publiée le {new Date(offer.created_at).toLocaleDateString('fr-FR')}</small>
           </li>
         ))}
       </ul>
