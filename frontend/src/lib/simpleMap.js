@@ -92,9 +92,17 @@ export class SimpleMap {
     this.handlePointerMove = this.handlePointerMove.bind(this);
     this.handlePointerUp = this.handlePointerUp.bind(this);
     this.handleWheel = this.handleWheel.bind(this);
+    this.handleWindowResize = () => this.updateSize();
 
-    this.resizeObserver = new ResizeObserver(this.handleResize);
-    this.resizeObserver.observe(this.container);
+    if (typeof window !== 'undefined' && typeof window.ResizeObserver === 'function') {
+      this.resizeObserver = new window.ResizeObserver(this.handleResize);
+      this.resizeObserver.observe(this.container);
+    } else {
+      this.resizeObserver = null;
+      if (typeof window !== 'undefined') {
+        window.addEventListener('resize', this.handleWindowResize);
+      }
+    }
 
     this.root.addEventListener('pointerdown', this.handlePointerDown);
     this.root.addEventListener('wheel', this.handleWheel, { passive: false });
@@ -111,6 +119,9 @@ export class SimpleMap {
 
   destroy() {
     this.resizeObserver?.disconnect();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.handleWindowResize);
+    }
     this.root.removeEventListener('pointerdown', this.handlePointerDown);
     this.root.removeEventListener('wheel', this.handleWheel);
     window.removeEventListener('pointermove', this.handlePointerMove);
