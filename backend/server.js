@@ -45,6 +45,7 @@ const listOffersByUserStmt = db.prepare(`
   ORDER BY o.created_at DESC
 `);
 const insertOfferStmt = db.prepare('INSERT INTO offers (producer_id, title, description, city) VALUES (?, ?, ?, ?)');
+const updateOfferStmt = db.prepare('UPDATE offers SET title = ?, description = ?, city = ? WHERE id = ?');
 const selectOfferWithOwnerStmt = db.prepare(`
   SELECT o.*, p.user_id AS producer_user_id, p.name AS producer_name, p.city AS producer_city,
          p.description AS producer_description
@@ -275,6 +276,33 @@ app.post('/api/offers', authenticateToken, requireProducer, (req, res) => {
   } catch (error) {
     console.error('Erreur création offre', error);
     res.status(500).json({ error: "Impossible de créer l'offre." });
+  }
+});
+
+app.put('/api/offers/:id', authenticateToken, requireProducer, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description = null, city = null } = req.body ?? {};
+
+    if (!title) {
+      return res.status(400).json({ error: "Le titre de l'offre est requis." });
+    }
+
+    const offer = selectOfferWithOwnerStmt.get(id);
+    if (!offer) {
+      return res.status(404).json({ error: 'Offre introuvable.' });
+    }
+
+    if (offer.producer_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Vous ne pouvez pas modifier cette offre.' });
+    }
+
+    updateOfferStmt.run(title, description, city, id);
+    const updatedOffer = selectOfferWithOwnerStmt.get(id);
+    res.json({ data: toOfferPayload(updatedOffer) });
+  } catch (error) {
+    console.error('Erreur mise à jour offre', error);
+    res.status(500).json({ error: "Impossible de modifier l'offre." });
   }
 });
 
