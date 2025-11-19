@@ -1,0 +1,13 @@
+# Monorepo dependencies
+node_modules
+backend/node_modules
+frontend/node_modules
+
+# Build outputs
+frontend/dist
+backend/dist
+
+# Environment files
+.env
+frontend/.env
+backend/.env
