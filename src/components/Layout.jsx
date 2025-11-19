@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import IdentityPanel from './IdentityPanel.jsx';
 
 const links = [
   { to: '/', label: 'Carte' },
@@ -27,6 +28,7 @@ function Layout() {
         </nav>
       </header>
       <main className="app-content">
+        <IdentityPanel />
         <Outlet />
       </main>
       <footer className="app-footer">© {new Date().getFullYear()} Collectif Laine Brute</footer>
