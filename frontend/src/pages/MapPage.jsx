@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { producers as fallbackProducers } from '../mockData.js';
-import { apiClient } from '../services/apiClient.js';
+import { api } from '../api.js';
 
 const MapPage = () => {
-  const [items, setItems] = useState(fallbackProducers);
+  const [producers, setProducers] = useState([]);
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
 
@@ -11,18 +10,19 @@ const MapPage = () => {
     let isMounted = true;
     setStatus('loading');
 
-    apiClient
+    api
       .getProducers()
       .then((data) => {
         if (!isMounted) return;
-        setItems(data);
+        setProducers(Array.isArray(data) ? data : []);
         setStatus('success');
         setErrorMessage(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted) return;
+        setProducers([]);
         setStatus('error');
-        setErrorMessage("Impossible de charger les producteurs depuis l'API. Les données locales sont affichées.");
+        setErrorMessage(error.message || "Impossible de charger les producteurs.");
       });
 
     return () => {
@@ -33,16 +33,19 @@ const MapPage = () => {
   return (
     <section>
       <h2>Carte des producteurs</h2>
-      <p>Découvrez les producteurs près de chez vous.</p>
+      <p>Découvrez les exploitations référencées sur la plateforme.</p>
       <div className="map-placeholder">[Carte interactive à venir]</div>
       {status === 'loading' && <p>Chargement des producteurs...</p>}
       {status === 'error' && <p className="error">{errorMessage}</p>}
       <h3>Producteurs référencés</h3>
+      {producers.length === 0 && status === 'success' && (
+        <p>Aucun producteur n'a encore été enregistré.</p>
+      )}
       <ul>
-        {items.map((producer) => (
+        {producers.map((producer) => (
           <li key={producer.id}>
-            <strong>{producer.name}</strong> — {producer.city} • Produits :{' '}
-            {producer.products.join(', ')}
+            <strong>{producer.name}</strong> — {producer.city || 'Ville non renseignée'}
+            <div>{producer.description || 'Description à venir.'}</div>
           </li>
         ))}
       </ul>

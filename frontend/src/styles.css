@@ -108,6 +108,22 @@ button:hover {
   background: #22543d;
 }
 
+.form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.form-inline input {
+  flex: 1 1 200px;
+}
+
+.form-inline .actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .error {
   margin-top: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -115,6 +131,21 @@ button:hover {
   background: #fee2e2;
   color: #b91c1c;
   border: 1px solid #fecaca;
+}
+
+.success {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.35rem;
+  background: #ecfccb;
+  color: #3f6212;
+  border: 1px solid #bbf7d0;
+}
+
+.grid-two {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .admin-stats {

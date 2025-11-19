@@ -8,18 +8,23 @@ Ce dépôt est désormais organisé en deux parties indépendantes :
 ## Installation
 
 ```bash
-# Front-end
-cd frontend
-npm install
-npm run dev
-
-# Back-end
+# Back-end (API Express + SQLite)
 cd backend
 npm install
-npm run dev
+npm run dev   # lance http://localhost:4000
+
+# Front-end (React + Vite)
+cd ../frontend
+npm install
+npm run dev   # lance http://localhost:5173
 ```
 
-Configurez vos variables d'environnement à partir des fichiers `.env.example` situés dans chaque dossier.
+Configurez vos variables d'environnement à partir de `backend/.env.example` (pour `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET`) et `frontend/.env` si vous souhaitez surcharger `VITE_API_URL`.
+
+Des comptes de démonstration sont pré-créés lors du premier lancement de l'API :
+
+- Producteur : `producer@example.com` / `password123`
+- Administrateur : `admin@example.com` / `password123`
 
 ## Communication front ↔ back
 
