@@ -19,26 +19,68 @@ app.use(express.json());
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
-const listProducersStmt = db.prepare(
-  'SELECT id, name, city, description, lat, lng, created_at FROM producers ORDER BY name ASC'
-);
+const listProducersStmt = db.prepare(`
+  SELECT id, name, city, description, lat, lng, created_at,
+         first_name, last_name, phone, siret,
+         show_identity, show_phone, show_siret
+  FROM producers
+  ORDER BY name ASC
+`);
 const findProducerByUserIdStmt = db.prepare('SELECT * FROM producers WHERE user_id = ?');
-const insertProducerStmt = db.prepare(
-  'INSERT INTO producers (user_id, name, city, description, lat, lng) VALUES (?, ?, ?, ?, ?, ?)'
-);
-const updateProducerStmt = db.prepare(
-  'UPDATE producers SET name = ?, city = ?, description = ?, lat = ?, lng = ? WHERE id = ?'
-);
+const insertProducerStmt = db.prepare(`
+  INSERT INTO producers (
+    user_id,
+    name,
+    city,
+    description,
+    lat,
+    lng,
+    first_name,
+    last_name,
+    phone,
+    siret,
+    show_identity,
+    show_phone,
+    show_siret
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const updateProducerStmt = db.prepare(`
+  UPDATE producers
+  SET name = ?,
+      city = ?,
+      description = ?,
+      lat = ?,
+      lng = ?,
+      first_name = ?,
+      last_name = ?,
+      phone = ?,
+      siret = ?,
+      show_identity = ?,
+      show_phone = ?,
+      show_siret = ?
+  WHERE id = ?
+`);
 const listOffersStmt = db.prepare(`
   SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id,
-         p.name AS producer_name, p.city AS producer_city, p.description AS producer_description
+         p.name AS producer_name, p.city AS producer_city, p.description AS producer_description,
+         p.first_name AS producer_first_name, p.last_name AS producer_last_name,
+         p.phone AS producer_phone, p.siret AS producer_siret,
+         p.show_identity AS producer_show_identity,
+         p.show_phone AS producer_show_phone,
+         p.show_siret AS producer_show_siret
   FROM offers o
   JOIN producers p ON p.id = o.producer_id
   ORDER BY o.created_at DESC
 `);
 const listOffersByUserStmt = db.prepare(`
   SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id,
-         p.name AS producer_name, p.city AS producer_city
+         p.name AS producer_name, p.city AS producer_city,
+         p.first_name AS producer_first_name, p.last_name AS producer_last_name,
+         p.phone AS producer_phone, p.siret AS producer_siret,
+         p.show_identity AS producer_show_identity,
+         p.show_phone AS producer_show_phone,
+         p.show_siret AS producer_show_siret
   FROM offers o
   JOIN producers p ON p.id = o.producer_id
   WHERE p.user_id = ?
@@ -47,7 +89,12 @@ const listOffersByUserStmt = db.prepare(`
 const insertOfferStmt = db.prepare('INSERT INTO offers (producer_id, title, description, city) VALUES (?, ?, ?, ?)');
 const selectOfferWithOwnerStmt = db.prepare(`
   SELECT o.*, p.user_id AS producer_user_id, p.name AS producer_name, p.city AS producer_city,
-         p.description AS producer_description
+         p.description AS producer_description,
+         p.first_name AS producer_first_name, p.last_name AS producer_last_name,
+         p.phone AS producer_phone, p.siret AS producer_siret,
+         p.show_identity AS producer_show_identity,
+         p.show_phone AS producer_show_phone,
+         p.show_siret AS producer_show_siret
   FROM offers o
   JOIN producers p ON o.producer_id = p.id
   WHERE o.id = ?
@@ -81,6 +128,15 @@ const toOfferPayload = (row) => ({
     name: row.producer_name,
     city: row.producer_city,
     description: row.producer_description,
+    contact: toPublicContact({
+      first_name: row.producer_first_name,
+      last_name: row.producer_last_name,
+      phone: row.producer_phone,
+      siret: row.producer_siret,
+      show_identity: row.producer_show_identity,
+      show_phone: row.producer_show_phone,
+      show_siret: row.producer_show_siret,
+    }),
   },
 });
 
@@ -92,6 +148,32 @@ const sanitizeCoordinate = (value) => {
   }
   return null;
 };
+
+const toVisibilityFlag = (value, defaultValue = 0) => {
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  if (typeof value === 'number') {
+    return value ? 1 : 0;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'on', 'oui', 'yes'].includes(normalized)) {
+      return 1;
+    }
+    if (['0', 'false', 'off', 'non', 'no'].includes(normalized)) {
+      return 0;
+    }
+  }
+  return defaultValue ? 1 : 0;
+};
+
+const toPublicContact = (producer) => ({
+  first_name: producer.show_identity ? producer.first_name ?? null : null,
+  last_name: producer.show_identity ? producer.last_name ?? null : null,
+  phone: producer.show_phone ? producer.phone ?? null : null,
+  siret: producer.show_siret ? producer.siret ?? null : null,
+});
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
@@ -182,7 +264,16 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/producers', (req, res) => {
   try {
-    const producers = listProducersStmt.all();
+    const producers = listProducersStmt.all().map((producer) => ({
+      id: producer.id,
+      name: producer.name,
+      city: producer.city,
+      description: producer.description,
+      lat: producer.lat,
+      lng: producer.lng,
+      created_at: producer.created_at,
+      contact: toPublicContact(producer),
+    }));
     res.json({ data: producers });
   } catch (error) {
     console.error('Erreur producers', error);
@@ -202,13 +293,39 @@ app.get('/api/my-producer', authenticateToken, requireProducer, (req, res) => {
 
 app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
   try {
-    const { name, city = null, description = null, lat = null, lng = null } = req.body ?? {};
+    const {
+      name,
+      city = null,
+      description = null,
+      lat = null,
+      lng = null,
+      first_name = null,
+      last_name = null,
+      phone = null,
+      siret = null,
+      show_identity = 0,
+      show_phone = 0,
+      show_siret = 0,
+    } = req.body ?? {};
     if (!name) {
       return res.status(400).json({ error: "Le nom de l'exploitation est requis." });
     }
 
     const existing = findProducerByUserIdStmt.get(req.user.id);
-    const payload = [name, city, description, sanitizeCoordinate(lat), sanitizeCoordinate(lng)];
+    const payload = [
+      name,
+      city,
+      description,
+      sanitizeCoordinate(lat),
+      sanitizeCoordinate(lng),
+      first_name,
+      last_name,
+      phone,
+      siret,
+      toVisibilityFlag(show_identity),
+      toVisibilityFlag(show_phone),
+      toVisibilityFlag(show_siret),
+    ];
 
     if (existing) {
       updateProducerStmt.run(...payload, existing.id);
@@ -248,6 +365,15 @@ app.get('/api/my-offers', authenticateToken, requireProducer, (req, res) => {
         id: row.producer_id,
         name: row.producer_name,
         city: row.producer_city,
+        contact: toPublicContact({
+          first_name: row.producer_first_name,
+          last_name: row.producer_last_name,
+          phone: row.producer_phone,
+          siret: row.producer_siret,
+          show_identity: row.producer_show_identity,
+          show_phone: row.producer_show_phone,
+          show_siret: row.producer_show_siret,
+        }),
       },
     }));
     res.json({ data: offers });

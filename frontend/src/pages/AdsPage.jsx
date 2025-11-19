@@ -38,18 +38,34 @@ const AdsPage = () => {
       {status === 'error' && <p className="error">{errorMessage}</p>}
       {offers.length === 0 && status === 'success' && <p>Aucune offre disponible pour le moment.</p>}
       <ul>
-        {offers.map((offer) => (
-          <li key={offer.id}>
-            <strong>{offer.title}</strong> — {offer.city || 'Ville non renseignée'}
-            <br />
-            {offer.description && <span>{offer.description}</span>}
-            <div>
-              Producteur : {offer.producer?.name || 'Inconnu'}{' '}
-              {offer.producer?.city ? `(${offer.producer.city})` : ''}
-            </div>
-            <small>Publiée le {new Date(offer.created_at).toLocaleDateString('fr-FR')}</small>
-          </li>
-        ))}
+        {offers.map((offer) => {
+          const contact = offer.producer?.contact ?? null;
+          const contactFullName = contact
+            ? [contact.first_name, contact.last_name].filter(Boolean).join(' ')
+            : '';
+          const hasContactInfo =
+            Boolean(contact) && Boolean(contactFullName || contact.phone || contact.siret);
+
+          return (
+            <li key={offer.id}>
+              <strong>{offer.title}</strong> — {offer.city || 'Ville non renseignée'}
+              <br />
+              {offer.description && <span>{offer.description}</span>}
+              <div>
+                Producteur : {offer.producer?.name || 'Inconnu'}{' '}
+                {offer.producer?.city ? `(${offer.producer.city})` : ''}
+              </div>
+              {hasContactInfo && (
+                <div className="offer-contact">
+                  {contactFullName && <div>Contact : {contactFullName}</div>}
+                  {contact?.phone && <div>Téléphone : {contact.phone}</div>}
+                  {contact?.siret && <div>SIRET : {contact.siret}</div>}
+                </div>
+              )}
+              <small>Publiée le {new Date(offer.created_at).toLocaleDateString('fr-FR')}</small>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

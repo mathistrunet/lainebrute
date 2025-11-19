@@ -180,6 +180,10 @@ const MapPage = () => {
   }, [selectedProducerId, sidebarOpen]);
 
   const selectedProducer = producers.find((producer) => producer.id === selectedProducerId) || null;
+  const selectedContact = selectedProducer?.contact ?? null;
+  const contactFullName = selectedContact
+    ? [selectedContact.first_name, selectedContact.last_name].filter(Boolean).join(' ')
+    : '';
 
   return (
     <section className="map-page" aria-label="Carte interactive des producteurs">
@@ -268,6 +272,13 @@ const MapPage = () => {
                 {selectedProducer.city || 'Ville non renseignée'}
               </p>
               <p>{selectedProducer.description || 'Description à venir.'}</p>
+              {selectedContact && (contactFullName || selectedContact.phone || selectedContact.siret) && (
+                <div className="producer-highlight__contact">
+                  {contactFullName && <p>Contact : {contactFullName}</p>}
+                  {selectedContact.phone && <p>Téléphone : {selectedContact.phone}</p>}
+                  {selectedContact.siret && <p>SIRET : {selectedContact.siret}</p>}
+                </div>
+              )}
             </div>
           )}
         </aside>
