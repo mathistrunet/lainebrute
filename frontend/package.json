@@ -1,0 +1,9 @@
+{
+  "name": "lainebrute-frontend-runner",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix .. run dev",
+    "build": "npm --prefix .. run build",
+    "preview": "npm --prefix .. run preview"
+  }
+}
