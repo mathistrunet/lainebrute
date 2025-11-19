@@ -5,6 +5,29 @@ const Database = require('better-sqlite3');
 const dbFile = path.join(__dirname, 'database.sqlite');
 const db = new Database(dbFile);
 
+const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""')}"`;
+
+const getTableColumns = (table) =>
+  db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all();
+
+const ensureColumn = (table, column, definition) => {
+  const columns = getTableColumns(table);
+  const columnNames = columns.map((info) => info.name);
+
+  if (columnNames.includes('TEXT')) {
+    console.warn(
+      `Detected unexpected column named "TEXT" in table ${table}. Consider migrating this column to a proper name.`
+    );
+  }
+
+  if (columnNames.includes(column)) {
+    return;
+  }
+
+  const columnDefinition = `${quoteIdentifier(column)} ${definition}`;
+  db.prepare(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${columnDefinition}`).run();
+};
+
 const normalizeSiretValue = (value) => {
   if (typeof value === 'string') {
     return value.replace(/\D/g, '');
@@ -48,16 +71,6 @@ const createTables = () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `).run();
-
-  const ensureColumn = (table, column, definition) => {
-    const hasColumn = db
-      .prepare(`PRAGMA table_info("${table}")`)
-      .all()
-      .some((info) => info.name === column);
-    if (!hasColumn) {
-      db.prepare(`ALTER TABLE "${table}" ADD COLUMN ${definition}`).run();
-    }
-  };
 
   ensureColumn('producers', 'first_name', 'TEXT');
   ensureColumn('producers', 'last_name', 'TEXT');
