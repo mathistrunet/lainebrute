@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
+import { SimpleMap } from '../lib/simpleMap.js';
 
 const DEFAULT_CENTER = [46.7111, 1.7191];
-const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 
 const MapPage = () => {
   const [producers, setProducers] = useState([]);
@@ -11,14 +10,11 @@ const MapPage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedProducerId, setSelectedProducerId] = useState(null);
-  const [leafletReady, setLeafletReady] = useState(
-    () => typeof window !== 'undefined' && Boolean(window.L)
-  );
-  const [leafletError, setLeafletError] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(null);
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markerLayerRef = useRef(null);
   const listRefs = useRef(new Map());
 
   useEffect(() => {
@@ -54,9 +50,8 @@ const MapPage = () => {
   );
 
   const focusProducerOnMap = useCallback((producer) => {
-    const leaflet = typeof window !== 'undefined' ? window.L : null;
     const map = mapInstanceRef.current;
-    if (!leaflet || !map || !producer) {
+    if (!map || !producer) {
       return;
     }
 
@@ -66,7 +61,7 @@ const MapPage = () => {
     }
 
     const targetZoom = Math.max(map.getZoom() || 6, 9);
-    map.flyTo(latLng, targetZoom, { duration: 0.8 });
+    map.flyTo(latLng, targetZoom);
   }, []);
 
   const handleProducerSelection = useCallback(
@@ -81,136 +76,98 @@ const MapPage = () => {
     [focusProducerOnMap, producers]
   );
 
+  const markerData = useMemo(
+    () =>
+      validProducers.map((producer) => ({
+        id: producer.id,
+        lat: producer.lat,
+        lng: producer.lng,
+        name: producer.name,
+        city: producer.city,
+      })),
+    [validProducers]
+  );
+
+  const markerBounds = useMemo(() => {
+    if (markerData.length === 0) {
+      return null;
+    }
+    return markerData.reduce(
+      (acc, marker) => ({
+        minLat: Math.min(acc.minLat, marker.lat),
+        maxLat: Math.max(acc.maxLat, marker.lat),
+        minLng: Math.min(acc.minLng, marker.lng),
+        maxLng: Math.max(acc.maxLng, marker.lng),
+      }),
+      {
+        minLat: markerData[0].lat,
+        maxLat: markerData[0].lat,
+        minLng: markerData[0].lng,
+        maxLng: markerData[0].lng,
+      }
+    );
+  }, [markerData]);
+
   useEffect(() => {
-    if (typeof document === 'undefined') {
+    if (!mapContainerRef.current || mapInstanceRef.current) {
       return;
     }
-    if (document.querySelector('link[data-leaflet-style="true"]')) {
-      return;
+
+    try {
+      const map = new SimpleMap(mapContainerRef.current, {
+        center: DEFAULT_CENTER,
+        zoom: 6,
+        minZoom: 3,
+        maxZoom: 12,
+      });
+      mapInstanceRef.current = map;
+      setMapReady(true);
+      setMapError(null);
+
+      return () => {
+        map.destroy();
+        mapInstanceRef.current = null;
+        setMapReady(false);
+      };
+    } catch (error) {
+      console.error("Impossible d'initialiser la carte", error);
+      setMapError("Impossible d'afficher la carte interactive.");
     }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = LEAFLET_CSS_URL;
-    link.dataset.leafletStyle = 'true';
-    document.head.appendChild(link);
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || leafletReady) {
-      return;
-    }
-
-    let isMounted = true;
-    const scriptId = 'leaflet-cdn-script';
-
-    if (window.L) {
-      setLeafletReady(true);
-      setLeafletError(null);
-      return;
-    }
-
-    const handleLoad = () => {
-      if (!isMounted) {
-        return;
-      }
-      setLeafletReady(true);
-      setLeafletError(null);
-    };
-
-    const handleError = () => {
-      if (!isMounted) {
-        return;
-      }
-      setLeafletError("Impossible de charger la librairie cartographique.");
-    };
-
-    let script = document.getElementById(scriptId);
-    if (script) {
-      script.addEventListener('load', handleLoad);
-      script.addEventListener('error', handleError);
-    } else {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = LEAFLET_JS_URL;
-      script.async = true;
-      script.crossOrigin = '';
-      script.addEventListener('load', handleLoad);
-      script.addEventListener('error', handleError);
-      document.body.appendChild(script);
-    }
-
-    return () => {
-      isMounted = false;
-      script?.removeEventListener('load', handleLoad);
-      script?.removeEventListener('error', handleError);
-    };
-  }, [leafletReady]);
-
-  useEffect(() => {
-    const leaflet = typeof window !== 'undefined' ? window.L : null;
-    if (!leafletReady || !leaflet || !mapContainerRef.current || mapInstanceRef.current) {
-      return;
-    }
-
-    const map = leaflet.map(mapContainerRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 6,
-      zoomControl: true,
-    });
-
-    leaflet
-      .tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-      })
-      .addTo(map);
-
-    markerLayerRef.current = leaflet.layerGroup().addTo(map);
-    mapInstanceRef.current = map;
-
-    return () => {
-      map.remove();
-      markerLayerRef.current = null;
-      mapInstanceRef.current = null;
-    };
-  }, [leafletReady]);
-
-  useEffect(() => {
-    const leaflet = typeof window !== 'undefined' ? window.L : null;
     const map = mapInstanceRef.current;
-    const markerLayer = markerLayerRef.current;
-    if (!leafletReady || !leaflet || !map || !markerLayer) {
+    if (!mapReady || !map) {
       return;
     }
 
-    markerLayer.clearLayers();
+    map.setMarkers(markerData, {
+      activeId: selectedProducerId,
+      onMarkerSelect: (marker) => handleProducerSelection(marker.id),
+    });
+  }, [handleProducerSelection, mapReady, markerData, selectedProducerId]);
 
-    if (validProducers.length === 0) {
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!mapReady || !map) {
+      return;
+    }
+
+    if (markerData.length === 0) {
       map.setView(DEFAULT_CENTER, 6);
       return;
     }
 
-    const bounds = leaflet.latLngBounds([]);
-
-    validProducers.forEach((producer) => {
-      const marker = leaflet.circleMarker([producer.lat, producer.lng], {
-        radius: 8,
-        weight: 2,
-        color: '#b91c1c',
-        fillColor: '#dc2626',
-        fillOpacity: 0.9,
-        className: 'producer-marker',
-      });
-      marker.on('click', () => handleProducerSelection(producer.id));
-      marker.addTo(markerLayer);
-      bounds.extend([producer.lat, producer.lng]);
-    });
-
-    if (validProducers.length === 1) {
-      map.setView(bounds.getCenter(), 10);
-    } else {
-      map.fitBounds(bounds, { padding: [40, 40] });
+    if (markerData.length === 1) {
+      const marker = markerData[0];
+      map.flyTo([marker.lat, marker.lng], Math.max(map.getZoom(), 9));
+      return;
     }
-  }, [handleProducerSelection, leafletReady, validProducers]);
+
+    if (markerBounds) {
+      map.fitBounds(markerBounds, { padding: 56 });
+    }
+  }, [mapReady, markerBounds, markerData]);
 
   useEffect(() => {
     if (!sidebarOpen || !selectedProducerId) {
@@ -234,17 +191,17 @@ const MapPage = () => {
             role="img"
             aria-label="Carte interactive des producteurs"
           ></div>
-          {!leafletReady && !leafletError && (
+          {!mapReady && !mapError && (
             <p className="map-status">Chargement de la carte...</p>
           )}
-          {leafletError && <p className="map-status error">{leafletError}</p>}
-          {leafletReady && status === 'loading' && (
+          {mapError && <p className="map-status error">{mapError}</p>}
+          {mapReady && status === 'loading' && (
             <p className="map-status">Chargement des producteurs...</p>
           )}
-          {leafletReady && status === 'error' && (
+          {mapReady && status === 'error' && (
             <p className="map-status error">{errorMessage}</p>
           )}
-          {leafletReady && status === 'success' && validProducers.length === 0 && (
+          {mapReady && status === 'success' && validProducers.length === 0 && (
             <p className="map-status">Aucun producteur géolocalisé n'est disponible pour le moment.</p>
           )}
         </div>

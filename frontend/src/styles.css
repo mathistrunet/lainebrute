@@ -136,6 +136,78 @@ ul {
   width: 100%;
   height: 100%;
   min-height: 100%;
+  position: relative;
+}
+
+.tile-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  background: #cbd5f5;
+  user-select: none;
+  touch-action: none;
+}
+
+.tile-map.is-dragging {
+  cursor: grabbing;
+}
+
+.tile-map__tiles,
+.tile-map__markers {
+  position: absolute;
+  inset: 0;
+}
+
+.tile-map__tiles img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.tile-map__markers {
+  pointer-events: none;
+}
+
+.tile-map__marker {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid #b91c1c;
+  background: #dc2626;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+}
+
+.tile-map__marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 6px;
+  height: 6px;
+  background: inherit;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
+}
+
+.tile-map__marker:focus-visible {
+  outline: 2px solid #facc15;
+  outline-offset: 2px;
+}
+
+.tile-map__marker.is-active {
+  border-color: #14532d;
+  background: #22c55e;
+  box-shadow: 0 10px 20px rgba(21, 128, 61, 0.35);
 }
 
 .map-status {
