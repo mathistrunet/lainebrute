@@ -49,6 +49,7 @@ function MapPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const highlightTimeoutRef = useRef(null);
+  const itemRefs = useRef(new Map());
 
   useEffect(() => {
     if (!mapContainerRef.current) return undefined;
@@ -153,6 +154,23 @@ function MapPage() {
 
   const handleLocate = (producer) => focusOnProducer(producer);
 
+  const registerItemRef = useCallback((id) => (node) => {
+    if (!itemRefs.current) return;
+    if (node) {
+      itemRefs.current.set(id, node);
+    } else {
+      itemRefs.current.delete(id);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeProducerId) return;
+    const node = itemRefs.current.get(activeProducerId);
+    if (node) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [activeProducerId]);
+
   const handleCitySelect = (city) => {
     setSearchValue(city.label);
     if (city.lat && city.lng && mapRef.current) {
@@ -222,6 +240,7 @@ function MapPage() {
             {markers.map((producer) => (
               <li
                 key={producer.id}
+                ref={registerItemRef(producer.id)}
                 className={`card ${
                   producer.id === activeProducerId ? 'is-active' : ''
                 } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
