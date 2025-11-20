@@ -51,7 +51,11 @@ function Layout() {
               <span>{user.email}</span>
             </div>
           )}
-          <button type="button" className="ghost" onClick={() => setIsIdentityPanelOpen(true)}>
+          <button
+            type="button"
+            className="ghost ghost--light"
+            onClick={() => setIsIdentityPanelOpen(true)}
+          >
             Connexion
           </button>
         </div>
