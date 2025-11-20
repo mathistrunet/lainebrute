@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.js';
 
 const ROLES = [
@@ -7,8 +7,7 @@ const ROLES = [
   { value: 'admin', label: 'Admin' },
 ];
 
-function IdentityPanel() {
-  const [user, setUser] = useState(() => api.getCurrentUser());
+function IdentityPanel({ user, onUserChange, onClose }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,10 +15,6 @@ function IdentityPanel() {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    setUser(api.getCurrentUser());
-  }, []);
 
   const resetForm = () => {
     setEmail('');
@@ -34,8 +29,9 @@ function IdentityPanel() {
     setMessage('');
     try {
       const loggedUser = await api.login(email.trim(), password.trim());
-      setUser(loggedUser);
+      onUserChange?.(loggedUser);
       setMessage('Connexion réussie.');
+      onClose?.();
       resetForm();
     } catch (loginError) {
       setError(loginError.message || "Impossible de s'identifier");
@@ -63,7 +59,7 @@ function IdentityPanel() {
 
   const handleLogout = () => {
     api.logout();
-    setUser(null);
+    onUserChange?.(null);
     setMessage('Vous êtes déconnecté.');
   };
 
@@ -77,20 +73,25 @@ function IdentityPanel() {
             Connectez-vous pour retrouver vos annonces, vos offres ou votre suivi administrateur.
           </p>
         </div>
-        <div className="identity-panel__switch">
-          <button
-            type="button"
-            className={mode === 'login' ? 'active' : ''}
-            onClick={() => setMode('login')}
-          >
-            Connexion
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'active' : ''}
-            onClick={() => setMode('register')}
-          >
-            Inscription
+        <div className="identity-panel__controls">
+          <div className="identity-panel__switch">
+            <button
+              type="button"
+              className={mode === 'login' ? 'active' : ''}
+              onClick={() => setMode('login')}
+            >
+              Connexion
+            </button>
+            <button
+              type="button"
+              className={mode === 'register' ? 'active' : ''}
+              onClick={() => setMode('register')}
+            >
+              Inscription
+            </button>
+          </div>
+          <button type="button" className="ghost" onClick={onClose}>
+            Fermer
           </button>
         </div>
       </header>

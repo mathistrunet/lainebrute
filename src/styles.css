@@ -58,6 +58,19 @@ body {
   border-bottom-color: #fff;
 }
 
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-actions__user {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .app-content {
   flex: 1;
   padding: 2rem;
@@ -307,6 +320,12 @@ button.ghost {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.identity-panel__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .identity-panel__switch {
