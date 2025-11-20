@@ -307,8 +307,25 @@ export class SimpleMap {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'tile-map__marker';
-        wrapper.append(label, button);
-        this.markerCache.set(cluster.key, { el: wrapper, labelEl: label, buttonEl: button });
+        const popup = document.createElement('div');
+        popup.className = 'tile-map__popup';
+        const popupTitle = document.createElement('strong');
+        popupTitle.className = 'tile-map__popup-title';
+        const popupCity = document.createElement('p');
+        popupCity.className = 'tile-map__popup-line';
+        const popupQuantity = document.createElement('p');
+        popupQuantity.className = 'tile-map__popup-line';
+        popup.append(popupTitle, popupCity, popupQuantity);
+        wrapper.append(label, button, popup);
+        this.markerCache.set(cluster.key, {
+          el: wrapper,
+          labelEl: label,
+          buttonEl: button,
+          popupEl: popup,
+          popupTitleEl: popupTitle,
+          popupCityEl: popupCity,
+          popupQuantityEl: popupQuantity,
+        });
         this.markersPane.appendChild(wrapper);
       }
 
@@ -326,6 +343,8 @@ export class SimpleMap {
         entryNode.buttonEl.classList.remove('is-active');
         entryNode.buttonEl.setAttribute('aria-label', `${cluster.count} producteurs regroupés`);
         entryNode.buttonEl.title = `${cluster.count} producteurs regroupés`;
+        entryNode.popupEl.classList.remove('is-visible');
+        entryNode.popupEl.setAttribute('hidden', 'true');
         entryNode.buttonEl.onclick = () => {
           const nextZoom = Math.min(this.options.maxZoom, cluster.zoomTarget ?? this.zoom + 1);
           this.flyTo([cluster.lat, cluster.lng], nextZoom);
@@ -334,7 +353,26 @@ export class SimpleMap {
         entryNode.el.classList.remove('tile-map__marker-wrapper--cluster');
         entryNode.buttonEl.classList.remove('tile-map__marker--cluster');
         entryNode.buttonEl.textContent = '';
-        entryNode.labelEl.textContent = cluster.marker.name ?? cluster.marker.title ?? 'Producteur';
+        const markerName = cluster.marker.name ?? cluster.marker.title ?? 'Producteur';
+        entryNode.labelEl.textContent = markerName;
+        entryNode.popupTitleEl.textContent = markerName;
+        if (cluster.marker.city) {
+          entryNode.popupCityEl.textContent = cluster.marker.city;
+          entryNode.popupCityEl.style.display = 'block';
+        } else {
+          entryNode.popupCityEl.textContent = '';
+          entryNode.popupCityEl.style.display = 'none';
+        }
+        if (cluster.marker.quantity) {
+          entryNode.popupQuantityEl.textContent = cluster.marker.quantity;
+          entryNode.popupQuantityEl.style.display = 'block';
+        } else {
+          entryNode.popupQuantityEl.textContent = '';
+          entryNode.popupQuantityEl.style.display = 'none';
+        }
+        entryNode.popupEl.removeAttribute('hidden');
+        const isActive = this.activeMarkerId !== null && cluster.marker.id === this.activeMarkerId;
+        entryNode.popupEl.classList.toggle('is-visible', isActive);
         const ariaLabelParts = [entryNode.labelEl.textContent];
         if (cluster.marker.city) {
           ariaLabelParts.push(`à ${cluster.marker.city}`);
@@ -348,7 +386,7 @@ export class SimpleMap {
         };
         entryNode.buttonEl.classList.toggle(
           'is-active',
-          this.activeMarkerId !== null && cluster.marker.id === this.activeMarkerId
+          isActive
         );
       }
     });
