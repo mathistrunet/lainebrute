@@ -43,6 +43,7 @@ body {
 .nav-links {
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 .nav-links a {
@@ -56,6 +57,20 @@ body {
 .nav-links a.active {
   color: #fff;
   border-bottom-color: #fff;
+}
+
+.nav-login {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #fff;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+
+.nav-login:hover,
+.nav-login:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .account-actions {
