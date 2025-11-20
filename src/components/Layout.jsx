@@ -43,6 +43,13 @@ function Layout() {
               {link.label}
             </Link>
           ))}
+          <button
+            type="button"
+            className="nav-login"
+            onClick={() => setIsIdentityPanelOpen(true)}
+          >
+            Connexion
+          </button>
         </nav>
         <div className="account-actions">
           {user && (
@@ -51,13 +58,6 @@ function Layout() {
               <span>{user.email}</span>
             </div>
           )}
-          <button
-            type="button"
-            className="ghost ghost--light"
-            onClick={() => setIsIdentityPanelOpen(true)}
-          >
-            Connexion
-          </button>
         </div>
       </header>
       <main className="app-content">
