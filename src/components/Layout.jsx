@@ -7,6 +7,8 @@ function Layout() {
   const location = useLocation();
   const [user, setUser] = useState(() => api.getCurrentUser());
   const [isIdentityPanelOpen, setIsIdentityPanelOpen] = useState(false);
+  const [panelMode, setPanelMode] = useState('login');
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   const links = useMemo(() => {
     const commonLinks = [
@@ -29,6 +31,22 @@ function Layout() {
     return commonLinks;
   }, [user]);
 
+  const openIdentity = (mode = 'login') => {
+    setPanelMode(mode);
+    setIsAccountMenuOpen(false);
+    setIsIdentityPanelOpen(true);
+  };
+
+  const displayName = user?.profile?.firstName || user?.profile?.lastName
+    ? `${user?.profile?.firstName ?? ''} ${user?.profile?.lastName ?? ''}`.trim()
+    : user?.email;
+
+  const handleLogout = () => {
+    api.logout();
+    setUser(null);
+    setIsAccountMenuOpen(false);
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -43,30 +61,52 @@ function Layout() {
               {link.label}
             </Link>
           ))}
-          <button
-            type="button"
-            className="nav-login"
-            onClick={() => setIsIdentityPanelOpen(true)}
-          >
-            Connexion
-          </button>
         </nav>
         <div className="account-actions">
+          {!user && (
+            <button
+              type="button"
+              className="nav-login"
+              onClick={() => openIdentity('login')}
+            >
+              Connexion
+            </button>
+          )}
+
           {user && (
-            <div className="account-actions__user">
-              <span className="eyebrow">Connecté</span>
-              <span>{user.email}</span>
+            <div className="account-menu">
+              <button
+                type="button"
+                className="account-menu__trigger"
+                onClick={() => setIsAccountMenuOpen((value) => !value)}
+              >
+                <span className="eyebrow">Compte</span>
+                <span>{displayName}</span>
+              </button>
+              {isAccountMenuOpen && (
+                <div className="account-menu__dropdown">
+                  <button type="button" onClick={() => openIdentity('profile')}>
+                    Modifier le profil
+                  </button>
+                  <button type="button" onClick={handleLogout}>
+                    Déconnexion
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </header>
       <main className="app-content">
         {isIdentityPanelOpen && (
-          <IdentityPanel
-            user={user}
-            onUserChange={setUser}
-            onClose={() => setIsIdentityPanelOpen(false)}
-          />
+          <div className="identity-overlay">
+            <IdentityPanel
+              user={user}
+              onUserChange={setUser}
+              onClose={() => setIsIdentityPanelOpen(false)}
+              defaultMode={panelMode}
+            />
+          </div>
         )}
         <Outlet />
       </main>

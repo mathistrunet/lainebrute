@@ -251,7 +251,7 @@ app.post('/api/register', async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis.' });
     }
-    if (!['producer', 'admin'].includes(role)) {
+    if (!['producer', 'admin', 'buyer'].includes(role)) {
       return res.status(400).json({ error: 'Rôle invalide.' });
     }
 
@@ -267,6 +267,22 @@ app.post('/api/register', async (req, res) => {
     console.error('Erreur register', error);
     res.status(500).json({ error: "Impossible de créer l'utilisateur." });
   }
+});
+
+app.get('/api/siret/:siret', (req, res) => {
+  const normalized = normalizeSiret(req.params.siret);
+  if (!normalized || !isValidSiretFormat(normalized)) {
+    return res.status(400).json({ error: 'Numéro de SIRET invalide.' });
+  }
+  const entreprise = knownSirets.get(normalized) ?? null;
+  return res.json({
+    data: {
+      valid: Boolean(entreprise),
+      siret: normalized,
+      entreprise: entreprise?.name ?? null,
+      city: entreprise?.city ?? null,
+    },
+  });
 });
 
 app.post('/api/login', async (req, res) => {

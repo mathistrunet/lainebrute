@@ -33,6 +33,7 @@ body {
   padding: 1rem 2rem;
   background: #1b4332;
   color: #fff;
+  gap: 1rem;
 }
 
 .brand {
@@ -44,6 +45,8 @@ body {
   display: flex;
   gap: 1rem;
   align-items: center;
+  flex: 1;
+  margin-left: 1.5rem;
 }
 
 .nav-links a {
@@ -77,6 +80,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-left: auto;
 }
 
 .account-actions__user {
@@ -86,12 +90,70 @@ body {
   color: rgba(255, 255, 255, 0.85);
 }
 
+.account-menu {
+  position: relative;
+}
+
+.account-menu__trigger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.account-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: #fff;
+  color: #1b4332;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  min-width: 200px;
+  overflow: hidden;
+  border: 1px solid #d8f3dc;
+  z-index: 5;
+}
+
+.account-menu__dropdown button {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-weight: 600;
+  color: #1b4332;
+}
+
+.account-menu__dropdown button:hover,
+.account-menu__dropdown button:focus-visible {
+  background: #f0f6f2;
+}
+
 .app-content {
   flex: 1;
   padding: 2rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+}
+
+.identity-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  overflow: auto;
 }
 
 .app-footer {
@@ -334,6 +396,7 @@ button.ghost {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: grid;
   gap: 1rem;
+  width: min(960px, 100%);
 }
 
 .identity-panel__header {
@@ -394,6 +457,21 @@ button.ghost {
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.identity-panel__actions--between {
+  justify-content: space-between;
+}
+
+.identity-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.input-with-action {
+  display: flex;
+  gap: 0.75rem;
 }
 
 .eyebrow {
