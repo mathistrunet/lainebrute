@@ -345,6 +345,11 @@ export class SimpleMap {
         entryNode.buttonEl.title = `${cluster.count} producteurs regroupés`;
         entryNode.popupEl.classList.remove('is-visible');
         entryNode.popupEl.setAttribute('hidden', 'true');
+        entryNode.buttonEl.dataset.hovered = 'false';
+        entryNode.buttonEl.onmouseenter = null;
+        entryNode.buttonEl.onmouseleave = null;
+        entryNode.buttonEl.onfocus = null;
+        entryNode.buttonEl.onblur = null;
         entryNode.buttonEl.onclick = () => {
           const nextZoom = Math.min(this.options.maxZoom, cluster.zoomTarget ?? this.zoom + 1);
           this.flyTo([cluster.lat, cluster.lng], nextZoom);
@@ -372,7 +377,6 @@ export class SimpleMap {
         }
         entryNode.popupEl.removeAttribute('hidden');
         const isActive = this.activeMarkerId !== null && cluster.marker.id === this.activeMarkerId;
-        entryNode.popupEl.classList.toggle('is-visible', isActive);
         const ariaLabelParts = [entryNode.labelEl.textContent];
         if (cluster.marker.city) {
           ariaLabelParts.push(`à ${cluster.marker.city}`);
@@ -384,6 +388,26 @@ export class SimpleMap {
             this.onMarkerSelect(cluster.marker);
           }
         };
+        const updatePopupVisibility = () => {
+          const isHovered = entryNode.buttonEl.dataset.hovered === 'true';
+          const isFocused =
+            typeof document !== 'undefined' && document.activeElement === entryNode.buttonEl;
+          const shouldShow = isActive || isHovered || isFocused;
+          entryNode.popupEl.classList.toggle('is-visible', shouldShow);
+        };
+
+        entryNode.buttonEl.dataset.hovered = entryNode.buttonEl.dataset.hovered ?? 'false';
+        entryNode.buttonEl.onmouseenter = () => {
+          entryNode.buttonEl.dataset.hovered = 'true';
+          updatePopupVisibility();
+        };
+        entryNode.buttonEl.onmouseleave = () => {
+          entryNode.buttonEl.dataset.hovered = 'false';
+          updatePopupVisibility();
+        };
+        entryNode.buttonEl.onfocus = updatePopupVisibility;
+        entryNode.buttonEl.onblur = updatePopupVisibility;
+        updatePopupVisibility();
         entryNode.buttonEl.classList.toggle(
           'is-active',
           isActive
