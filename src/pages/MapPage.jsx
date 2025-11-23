@@ -48,6 +48,7 @@ function MapPage() {
   const [highlightedProducerId, setHighlightedProducerId] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [userLocation, setUserLocation] = useState(null);
   const highlightTimeoutRef = useRef(null);
   const itemRefs = useRef(new Map());
 
@@ -59,6 +60,23 @@ function MapPage() {
       minZoom: 4,
       maxZoom: 12,
     });
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          setUserLocation(nextLocation);
+          mapRef.current?.flyTo([nextLocation.lat, nextLocation.lng], 7);
+        },
+        (geoError) => {
+          console.warn('Impossible de récupérer la géolocalisation', geoError);
+        },
+        { maximumAge: 5 * 60 * 1000, timeout: 8000 }
+      );
+    }
     return () => mapRef.current?.destroy();
   }, []);
 
@@ -138,8 +156,13 @@ function MapPage() {
       onMarkerSelect: (marker) => focusOnProducer(marker),
       activeId: activeProducerId,
     });
+
     if (markers.length > 0 && !activeProducerId) {
-      const bounds = markers.reduce(
+      const points = [...markers];
+      if (userLocation) {
+        points.push({ id: 'user', lat: userLocation.lat, lng: userLocation.lng });
+      }
+      const bounds = points.reduce(
         (acc, marker) => ({
           minLat: Math.min(acc.minLat, marker.lat),
           maxLat: Math.max(acc.maxLat, marker.lat),
@@ -148,9 +171,11 @@ function MapPage() {
         }),
         { minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 }
       );
-      mapRef.current.fitBounds(bounds, { padding: 64 });
+      mapRef.current.fitBounds(bounds, { padding: 72 });
+    } else if (userLocation && !activeProducerId) {
+      mapRef.current.flyTo([userLocation.lat, userLocation.lng], 7);
     }
-  }, [markers, activeProducerId, focusOnProducer]);
+  }, [markers, activeProducerId, focusOnProducer, userLocation]);
 
   const handleLocate = (producer) => focusOnProducer(producer);
 
@@ -178,6 +203,28 @@ function MapPage() {
     }
   };
 
+  const handleUserRecenter = () => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.flyTo([userLocation.lat, userLocation.lng], 8);
+    } else if (mapRef.current) {
+      mapRef.current.flyTo([46.6, 2.2], 6);
+    }
+  };
+
+  const handleShowAll = () => {
+    if (!mapRef.current || markers.length === 0) return;
+    const bounds = markers.reduce(
+      (acc, marker) => ({
+        minLat: Math.min(acc.minLat, marker.lat),
+        maxLat: Math.max(acc.maxLat, marker.lat),
+        minLng: Math.min(acc.minLng, marker.lng),
+        maxLng: Math.max(acc.maxLng, marker.lng),
+      }),
+      { minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 }
+    );
+    mapRef.current.fitBounds(bounds, { padding: 80 });
+  };
+
   return (
     <section className="map-page">
       <div className="map-page__header">
@@ -198,67 +245,87 @@ function MapPage() {
         </div>
       </div>
 
-      <div className="map-layout">
-        <div ref={mapContainerRef} className="map-canvas" aria-label="Carte des producteurs" />
-        <button
-          type="button"
-          className="map-panel-toggle"
-          onClick={() => setIsPanelOpen((open) => !open)}
-          aria-expanded={isPanelOpen}
-          aria-controls="producer-panel"
-        >
-          {isPanelOpen ? 'Masquer la liste' : 'Voir la liste des producteurs'}
-        </button>
-        <div className="map-legend">
-          <p className="eyebrow">Statut</p>
-          <ul>
-            <li><span className="dot dot--primary" /> Producteur actif</li>
-            <li><span className="dot" /> Autres annonces</li>
-          </ul>
-          {status === 'loading' && <small className="muted">Chargement des producteurs...</small>}
-          {error && <small className="error">{error}</small>}
-        </div>
-        <aside
-          id="producer-panel"
-          className={`map-side-panel ${isPanelOpen ? 'is-open' : ''}`}
-          aria-label="Liste des producteurs"
-        >
-          <div className="map-side-panel__header">
-            <div>
-              <p className="eyebrow">Producteurs référencés</p>
-              <h2>Liste des producteurs</h2>
-              <p className="muted">
-                Cliquez sur un point de la carte pour ouvrir le détail du producteur et le
-                sélectionner dans la liste.
-              </p>
-            </div>
-            <button type="button" className="ghost" onClick={() => setIsPanelOpen(false)}>
-              Fermer
+      <div className="map-shell">
+        <div className="map-shell__toolbar">
+          <div>
+            <p className="eyebrow">Navigation</p>
+            <p className="muted">
+              Glissez pour vous déplacer, utilisez la molette pour zoomer et survolez un point pour
+              afficher les détails d&apos;un producteur.
+            </p>
+          </div>
+          <div className="map-shell__actions">
+            <button type="button" className="ghost" onClick={handleUserRecenter}>
+              Recentrer sur ma position
+            </button>
+            <button type="button" className="ghost" onClick={handleShowAll}>
+              Afficher tous les producteurs
             </button>
           </div>
-          <ul className="card-list map-side-panel__list">
-            {markers.map((producer) => (
-              <li
-                key={producer.id}
-                ref={registerItemRef(producer.id)}
-                className={`card ${
-                  producer.id === activeProducerId ? 'is-active' : ''
-                } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
-              >
-                <div>
-                  <strong>{producer.name}</strong>
-                  {producer.city && <p className="muted">{producer.city}</p>}
-                  {producer.quantity && <p>{producer.quantity}</p>}
-                </div>
-                <div className="card__actions">
-                  <button type="button" className="ghost" onClick={() => handleLocate(producer)}>
-                    Localiser
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </aside>
+        </div>
+
+        <div className="map-layout">
+          <div ref={mapContainerRef} className="map-canvas" aria-label="Carte des producteurs" />
+          <button
+            type="button"
+            className="map-panel-toggle"
+            onClick={() => setIsPanelOpen((open) => !open)}
+            aria-expanded={isPanelOpen}
+            aria-controls="producer-panel"
+          >
+            {isPanelOpen ? 'Masquer la liste' : 'Voir la liste des producteurs'}
+          </button>
+          <div className="map-legend">
+            <p className="eyebrow">Statut</p>
+            <ul>
+              <li><span className="dot dot--primary" /> Producteur actif</li>
+              <li><span className="dot" /> Autres annonces</li>
+            </ul>
+            {status === 'loading' && <small className="muted">Chargement des producteurs...</small>}
+            {error && <small className="error">{error}</small>}
+          </div>
+          <aside
+            id="producer-panel"
+            className={`map-side-panel ${isPanelOpen ? 'is-open' : ''}`}
+            aria-label="Liste des producteurs"
+          >
+            <div className="map-side-panel__header">
+              <div>
+                <p className="eyebrow">Producteurs référencés</p>
+                <h2>Liste des producteurs</h2>
+                <p className="muted">
+                  Cliquez sur un point de la carte pour ouvrir le détail du producteur et le
+                  sélectionner dans la liste.
+                </p>
+              </div>
+              <button type="button" className="ghost" onClick={() => setIsPanelOpen(false)}>
+                Fermer
+              </button>
+            </div>
+            <ul className="card-list map-side-panel__list">
+              {markers.map((producer) => (
+                <li
+                  key={producer.id}
+                  ref={registerItemRef(producer.id)}
+                  className={`card ${
+                    producer.id === activeProducerId ? 'is-active' : ''
+                  } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
+                >
+                  <div>
+                    <strong>{producer.name}</strong>
+                    {producer.city && <p className="muted">{producer.city}</p>}
+                    {producer.quantity && <p>{producer.quantity}</p>}
+                  </div>
+                  <div className="card__actions">
+                    <button type="button" className="ghost" onClick={() => handleLocate(producer)}>
+                      Localiser
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        </div>
       </div>
     </section>
   );
