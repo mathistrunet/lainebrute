@@ -46,7 +46,7 @@ const createTables = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('producer', 'admin')),
+      role TEXT NOT NULL CHECK(role IN ('producer', 'admin', 'buyer')),
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `).run();

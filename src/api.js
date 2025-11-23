@@ -1,5 +1,6 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
 const TOKEN_STORAGE_KEY = 'lainebrute.jwt';
+const PROFILE_STORAGE_KEY = 'lainebrute.profiles';
 const runtime = typeof globalThis !== 'undefined' ? globalThis : {};
 
 const getStorage = () => runtime.localStorage ?? null;
@@ -45,7 +46,42 @@ const decodeTokenPayload = (token) => {
   }
 };
 
-const getCurrentUser = () => decodeTokenPayload(getToken());
+const getProfiles = () => {
+  const storage = getStorage();
+  if (!storage) return {};
+  try {
+    return JSON.parse(storage.getItem(PROFILE_STORAGE_KEY)) ?? {};
+  } catch (error) {
+    console.warn('Impossible de lire les profils stockés', error);
+    return {};
+  }
+};
+
+const persistProfiles = (profiles) => {
+  const storage = getStorage();
+  if (!storage) return;
+  storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+};
+
+const saveProfile = (email, profile) => {
+  if (!email) return null;
+  const profiles = getProfiles();
+  profiles[email] = { ...(profiles[email] ?? {}), ...profile };
+  persistProfiles(profiles);
+  return profiles[email];
+};
+
+const getProfile = (email) => {
+  if (!email) return null;
+  const profiles = getProfiles();
+  return profiles[email] ?? null;
+};
+
+const getCurrentUser = () => {
+  const payload = decodeTokenPayload(getToken());
+  if (!payload) return null;
+  return { ...payload, profile: getProfile(payload.email) };
+};
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers ?? {}) };
@@ -95,6 +131,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password, role }),
     }),
+  saveProfile: (email, profile) => saveProfile(email, profile),
+  getProfile,
+  verifySiret: (siret) => request(`/siret/${encodeURIComponent(siret ?? '')}`),
+  requestPasswordReset: async (email) => {
+    if (!email) {
+      throw new Error('Adresse email requise.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return { ok: true };
+  },
   logout: () => storeToken(null),
   getProducers: () => request('/producers'),
   createProducerProfile: (body) =>
