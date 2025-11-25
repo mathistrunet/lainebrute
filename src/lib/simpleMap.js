@@ -499,6 +499,10 @@ export class SimpleMap {
   }
 
   handlePointerDown(event) {
+    const markerButton = event.target.closest('.tile-map__marker');
+    if (markerButton) {
+      return;
+    }
     if (event.button !== 0 && event.pointerType !== 'touch') {
       return;
     }
