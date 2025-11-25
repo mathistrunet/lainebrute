@@ -110,7 +110,13 @@ function Layout() {
         )}
         <Outlet />
       </main>
-      <footer className="app-footer">© {new Date().getFullYear()} Collectif Laine Brute</footer>
+      <footer className="app-footer">
+        <span>© {new Date().getFullYear()} Collectif Laine Brute</span>
+        <nav className="footer-links">
+          <Link to="/conditions">Conditions d&apos;utilisation</Link>
+          <Link to="/contact">Nous contacter</Link>
+        </nav>
+      </footer>
     </div>
   );
 }

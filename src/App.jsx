@@ -5,6 +5,8 @@ import MapPage from './pages/MapPage.jsx';
 import AdsPage from './pages/AdsPage.jsx';
 import ProducerDashboard from './pages/ProducerDashboard.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+import TermsPage from './pages/TermsPage.jsx';
+import ContactPage from './pages/ContactPage.jsx';
 
 function App() {
   return (
@@ -14,6 +16,8 @@ function App() {
         <Route path="/annonces" element={<AdsPage />} />
         <Route path="/producteur" element={<ProducerDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/conditions" element={<TermsPage />} />
+        <Route path="/contact" element={<ContactPage />} />
       </Route>
     </Routes>
   );
