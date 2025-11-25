@@ -64,7 +64,8 @@ const updateProducerStmt = db.prepare(`
   WHERE id = ?
 `);
 const listOffersStmt = db.prepare(`
-  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id,
+  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
+         u.role AS owner_role, u.email AS owner_email,
          p.name AS producer_name, p.city AS producer_city, p.description AS producer_description,
          p.first_name AS producer_first_name, p.last_name AS producer_last_name,
          p.phone AS producer_phone, p.siret AS producer_siret,
@@ -72,11 +73,13 @@ const listOffersStmt = db.prepare(`
          p.show_phone AS producer_show_phone,
          p.show_siret AS producer_show_siret
   FROM offers o
-  JOIN producers p ON p.id = o.producer_id
+  JOIN users u ON u.id = o.user_id
+  LEFT JOIN producers p ON p.id = o.producer_id
   ORDER BY o.created_at DESC
 `);
 const listOffersByUserStmt = db.prepare(`
-  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id,
+  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
+         u.role AS owner_role, u.email AS owner_email,
          p.name AS producer_name, p.city AS producer_city,
          p.first_name AS producer_first_name, p.last_name AS producer_last_name,
          p.phone AS producer_phone, p.siret AS producer_siret,
@@ -84,14 +87,18 @@ const listOffersByUserStmt = db.prepare(`
          p.show_phone AS producer_show_phone,
          p.show_siret AS producer_show_siret
   FROM offers o
-  JOIN producers p ON p.id = o.producer_id
-  WHERE p.user_id = ?
+  JOIN users u ON u.id = o.user_id
+  LEFT JOIN producers p ON p.id = o.producer_id
+  WHERE o.user_id = ?
   ORDER BY o.created_at DESC
 `);
-const insertOfferStmt = db.prepare('INSERT INTO offers (producer_id, title, description, city) VALUES (?, ?, ?, ?)');
+const insertOfferStmt = db.prepare(
+  'INSERT INTO offers (producer_id, user_id, title, description, city) VALUES (?, ?, ?, ?, ?)'
+);
 const updateOfferStmt = db.prepare('UPDATE offers SET title = ?, description = ?, city = ? WHERE id = ?');
 const selectOfferWithOwnerStmt = db.prepare(`
-  SELECT o.*, p.user_id AS producer_user_id, p.name AS producer_name, p.city AS producer_city,
+  SELECT o.*, o.user_id AS owner_user_id, u.email AS owner_email, u.role AS owner_role,
+         p.user_id AS producer_user_id, p.name AS producer_name, p.city AS producer_city,
          p.description AS producer_description,
          p.first_name AS producer_first_name, p.last_name AS producer_last_name,
          p.phone AS producer_phone, p.siret AS producer_siret,
@@ -99,7 +106,8 @@ const selectOfferWithOwnerStmt = db.prepare(`
          p.show_phone AS producer_show_phone,
          p.show_siret AS producer_show_siret
   FROM offers o
-  JOIN producers p ON o.producer_id = p.id
+  JOIN users u ON u.id = o.user_id
+  LEFT JOIN producers p ON o.producer_id = p.id
   WHERE o.id = ?
 `);
 const deleteOfferStmt = db.prepare('DELETE FROM offers WHERE id = ?');
@@ -109,8 +117,8 @@ const adminOffersStmt = db.prepare(`
          p.id AS producer_id, p.name AS producer_name, p.city AS producer_city,
          u.id AS user_id, u.email AS user_email, u.role AS user_role
   FROM offers o
-  JOIN producers p ON p.id = o.producer_id
-  JOIN users u ON u.id = p.user_id
+  LEFT JOIN producers p ON p.id = o.producer_id
+  JOIN users u ON u.id = o.user_id
   ORDER BY o.created_at DESC
 `);
 const listTablesStmt = db.prepare(
@@ -137,29 +145,40 @@ const knownSirets = new Map(
     .filter(([siret]) => Boolean(siret))
 );
 
-const toOfferPayload = (row) => ({
-  id: row.id,
-  title: row.title,
-  description: row.description,
-  city: row.city,
-  created_at: row.created_at,
-  producer_id: row.producer_id,
-  producer: {
-    id: row.producer_id,
-    name: row.producer_name,
-    city: row.producer_city,
-    description: row.producer_description,
-    contact: toPublicContact({
-      first_name: row.producer_first_name,
-      last_name: row.producer_last_name,
-      phone: row.producer_phone,
-      siret: row.producer_siret,
-      show_identity: row.producer_show_identity,
-      show_phone: row.producer_show_phone,
-      show_siret: row.producer_show_siret,
-    }),
-  },
-});
+const toOfferPayload = (row) => {
+  const producer = row.producer_id
+    ? {
+        id: row.producer_id,
+        name: row.producer_name,
+        city: row.producer_city,
+        description: row.producer_description,
+        contact: toPublicContact({
+          first_name: row.producer_first_name,
+          last_name: row.producer_last_name,
+          phone: row.producer_phone,
+          siret: row.producer_siret,
+          show_identity: row.producer_show_identity,
+          show_phone: row.producer_show_phone,
+          show_siret: row.producer_show_siret,
+        }),
+      }
+    : null;
+
+  const owner = row.owner_user_id
+    ? { id: row.owner_user_id, email: row.owner_email ?? null, role: row.owner_role ?? null }
+    : null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    city: row.city,
+    created_at: row.created_at,
+    producer_id: row.producer_id,
+    owner,
+    producer,
+  };
+};
 
 const withSiretVerification = (producer) => {
   if (!producer) {
@@ -224,19 +243,16 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-const requireProducer = (req, res, next) => {
-  if (req.user?.role !== 'producer') {
-    return res.status(403).json({ error: 'Accès réservé aux producteurs.' });
+const requireRole = (...allowedRoles) => (req, res, next) => {
+  if (!req.user || !allowedRoles.includes(req.user.role)) {
+    return res.status(403).json({ error: "Accès refusé pour ce rôle." });
   }
   return next();
 };
 
-const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
-  }
-  return next();
-};
+const requireProducer = requireRole('producer', 'admin');
+const requirePublisher = requireRole('producer', 'buyer', 'admin');
+const requireAdmin = requireRole('admin');
 
 const generateToken = (user) =>
   jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
@@ -419,30 +435,9 @@ app.get('/api/offers', (req, res) => {
   }
 });
 
-app.get('/api/my-offers', authenticateToken, requireProducer, (req, res) => {
+app.get('/api/my-offers', authenticateToken, requirePublisher, (req, res) => {
   try {
-    const offers = listOffersByUserStmt.all(req.user.id).map((row) => ({
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      city: row.city,
-      created_at: row.created_at,
-      producer_id: row.producer_id,
-      producer: {
-        id: row.producer_id,
-        name: row.producer_name,
-        city: row.producer_city,
-        contact: toPublicContact({
-          first_name: row.producer_first_name,
-          last_name: row.producer_last_name,
-          phone: row.producer_phone,
-          siret: row.producer_siret,
-          show_identity: row.producer_show_identity,
-          show_phone: row.producer_show_phone,
-          show_siret: row.producer_show_siret,
-        }),
-      },
-    }));
+    const offers = listOffersByUserStmt.all(req.user.id).map(toOfferPayload);
     res.json({ data: offers });
   } catch (error) {
     console.error('Erreur my-offers', error);
@@ -450,19 +445,25 @@ app.get('/api/my-offers', authenticateToken, requireProducer, (req, res) => {
   }
 });
 
-app.post('/api/offers', authenticateToken, requireProducer, (req, res) => {
+app.post('/api/offers', authenticateToken, requirePublisher, (req, res) => {
   try {
     const { title, description = null, city = null } = req.body ?? {};
     if (!title) {
       return res.status(400).json({ error: "Le titre de l'offre est requis." });
     }
 
-    const producer = findProducerByUserIdStmt.get(req.user.id);
-    if (!producer) {
-      return res.status(400).json({ error: 'Veuillez créer votre profil producteur avant de publier une offre.' });
+    let producerId = null;
+    if (req.user.role === 'producer') {
+      const producer = findProducerByUserIdStmt.get(req.user.id);
+      if (!producer) {
+        return res
+          .status(400)
+          .json({ error: 'Veuillez créer votre profil producteur avant de publier une offre.' });
+      }
+      producerId = producer.id;
     }
 
-    const result = insertOfferStmt.run(producer.id, title, description, city);
+    const result = insertOfferStmt.run(producerId, req.user.id, title, description, city);
     const created = selectOfferWithOwnerStmt.get(result.lastInsertRowid);
     res.status(201).json({ data: toOfferPayload(created) });
   } catch (error) {
@@ -471,7 +472,7 @@ app.post('/api/offers', authenticateToken, requireProducer, (req, res) => {
   }
 });
 
-app.put('/api/offers/:id', authenticateToken, requireProducer, (req, res) => {
+app.put('/api/offers/:id', authenticateToken, requirePublisher, (req, res) => {
   try {
     const { id } = req.params;
     const { title, description = null, city = null } = req.body ?? {};
@@ -485,7 +486,7 @@ app.put('/api/offers/:id', authenticateToken, requireProducer, (req, res) => {
       return res.status(404).json({ error: 'Offre introuvable.' });
     }
 
-    if (offer.producer_user_id !== req.user.id) {
+    if (req.user.role !== 'admin' && offer.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Vous ne pouvez pas modifier cette offre.' });
     }
 
@@ -506,7 +507,7 @@ app.delete('/api/offers/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Offre introuvable.' });
     }
 
-    if (req.user.role !== 'admin' && offer.producer_user_id !== req.user.id) {
+    if (req.user.role !== 'admin' && offer.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Vous ne pouvez pas supprimer cette offre.' });
     }
 
