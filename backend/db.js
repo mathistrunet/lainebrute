@@ -47,6 +47,9 @@ const createTables = () => {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('producer', 'admin', 'buyer')),
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      verification_token TEXT,
+      verification_token_expires_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
@@ -79,6 +82,9 @@ const createTables = () => {
   ensureColumn('producers', 'show_identity', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('producers', 'show_phone', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('producers', 'show_siret', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'verification_token', 'TEXT');
+  ensureColumn('users', 'verification_token_expires_at', 'TEXT');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS offers (
@@ -115,7 +121,7 @@ const seedDatabase = () => {
   const buyerPasswordHash = bcrypt.hashSync('mathtrunet100', 10);
   const producerPasswordHash = bcrypt.hashSync('mathtrunet101', 10);
   const adminPasswordHash = bcrypt.hashSync('mathtrunet102', 10);
-  const insertUser = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
+  const insertUser = db.prepare('INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, 1)');
 
   const buyerUserId = insertUser.run('mathtrunet100@gmail.com', buyerPasswordHash, 'buyer').lastInsertRowid;
   const producerUserId = insertUser.run('mathtrunet101@gmail.com', producerPasswordHash, 'producer').lastInsertRowid;

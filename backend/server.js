@@ -4,6 +4,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const db = require('./db');
 const officialSirets = require('./official-sirets.json');
@@ -13,13 +15,24 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
+const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL;
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json());
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
+const updateUserVerificationStmt = db.prepare(
+  'UPDATE users SET verification_token = ?, verification_token_expires_at = ?, email_verified = 0 WHERE id = ?'
+);
+const findUserByVerificationTokenStmt = db.prepare('SELECT * FROM users WHERE verification_token = ?');
+const verifyUserStmt = db.prepare(
+  'UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?'
+);
+const deleteUserByIdStmt = db.prepare('DELETE FROM users WHERE id = ?');
 const listProducersStmt = db.prepare(`
   SELECT id, name, city, description, lat, lng, created_at,
          first_name, last_name, phone, siret,
@@ -124,6 +137,44 @@ const adminOffersStmt = db.prepare(`
 const listTablesStmt = db.prepare(
   "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
 );
+
+const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
+
+const mailTransport = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+  auth: process.env.SMTP_USER
+    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    : undefined,
+});
+
+const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
+
+const buildVerificationLink = (token) => {
+  const baseUrl = EMAIL_VERIFICATION_URL || `${BACKEND_BASE_URL}/api/verify-email`;
+  return `${baseUrl}?token=${encodeURIComponent(token)}`;
+};
+
+const sendVerificationEmail = async (recipient, token) => {
+  if (!process.env.SMTP_HOST) {
+    throw new Error('SMTP non configuré : veuillez renseigner SMTP_HOST');
+  }
+
+  const verificationLink = buildVerificationLink(token);
+  const message = {
+    from: EMAIL_FROM,
+    to: recipient,
+    subject: 'Vérifiez votre adresse email',
+    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant : ${verificationLink}`,
+    html: `
+      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant :</p>
+      <p><a href="${verificationLink}">${verificationLink}</a></p>
+    `,
+  };
+
+  await mailTransport.sendMail(message);
+};
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
 
@@ -278,7 +329,24 @@ app.post('/api/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = insertUserStmt.run(email, passwordHash, role);
-    res.status(201).json({ data: { id: result.lastInsertRowid, email, role } });
+    const verificationToken = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
+
+    updateUserVerificationStmt.run(verificationToken, expiresAt, result.lastInsertRowid);
+
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (sendError) {
+      console.error('Erreur envoi email de vérification', sendError);
+      deleteUserByIdStmt.run(result.lastInsertRowid);
+      return res
+        .status(500)
+        .json({ error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer." });
+    }
+
+    res
+      .status(201)
+      .json({ data: { id: result.lastInsertRowid, email, role, emailVerified: false } });
   } catch (error) {
     console.error('Erreur register', error);
     res.status(500).json({ error: "Impossible de créer l'utilisateur." });
@@ -301,6 +369,36 @@ app.get('/api/siret/:siret', (req, res) => {
   });
 });
 
+app.get('/api/verify-email', (req, res) => {
+  try {
+    const { token } = req.query ?? {};
+    if (!token) {
+      return res.status(400).json({ error: 'Token manquant.' });
+    }
+
+    const user = findUserByVerificationTokenStmt.get(token);
+    if (!user) {
+      return res.status(400).json({ error: 'Lien de vérification invalide.' });
+    }
+
+    if (!user.verification_token_expires_at) {
+      return res.status(400).json({ error: 'Lien de vérification invalide.' });
+    }
+
+    const expiresAt = new Date(user.verification_token_expires_at).getTime();
+    if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
+      return res.status(400).json({ error: 'Lien de vérification expiré.' });
+    }
+
+    verifyUserStmt.run(user.id);
+
+    return res.json({ data: { message: 'Email vérifié avec succès.' } });
+  } catch (error) {
+    console.error('Erreur verify-email', error);
+    res.status(500).json({ error: "Impossible de vérifier cet email." });
+  }
+});
+
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body ?? {};
@@ -316,6 +414,10 @@ app.post('/api/login', async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
       return res.status(400).json({ error: 'Identifiants incorrects.' });
+    }
+
+    if (!user.email_verified) {
+      return res.status(403).json({ error: 'Email non vérifié.' });
     }
 
     const token = generateToken(user);
