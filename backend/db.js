@@ -83,12 +83,14 @@ const createTables = () => {
   db.prepare(`
     CREATE TABLE IF NOT EXISTS offers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      producer_id INTEGER NOT NULL,
+      producer_id INTEGER,
+      user_id INTEGER,
       title TEXT NOT NULL,
       description TEXT,
       city TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (producer_id) REFERENCES producers(id) ON DELETE CASCADE
+      FOREIGN KEY (producer_id) REFERENCES producers(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `).run();
 };
@@ -110,12 +112,14 @@ const seedDatabase = () => {
     return;
   }
 
-  const passwordHash = bcrypt.hashSync('password123', 10);
+  const buyerPasswordHash = bcrypt.hashSync('mathtrunet100', 10);
+  const producerPasswordHash = bcrypt.hashSync('mathtrunet101', 10);
+  const adminPasswordHash = bcrypt.hashSync('mathtrunet102', 10);
   const insertUser = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
 
-  insertUser.run('admin@example.com', passwordHash, 'admin');
-  const producerUserId = insertUser.run('producer@example.com', passwordHash, 'producer').lastInsertRowid;
-  const secondProducerUserId = insertUser.run('verger@example.com', passwordHash, 'producer').lastInsertRowid;
+  const buyerUserId = insertUser.run('mathtrunet100@gmail.com', buyerPasswordHash, 'buyer').lastInsertRowid;
+  const producerUserId = insertUser.run('mathtrunet101@gmail.com', producerPasswordHash, 'producer').lastInsertRowid;
+  insertUser.run('mathtrunet102@gmail.com', adminPasswordHash, 'admin');
 
   const insertProducer = db.prepare(`
     INSERT INTO producers (
@@ -151,39 +155,39 @@ const seedDatabase = () => {
     1,
     0
   ).lastInsertRowid;
-  const vergerSudId = insertProducer.run(
-    secondProducerUserId,
-    'Les Jardins Provençaux',
-    'Avignon',
-    'Maraîchage diversifié et herbes aromatiques.',
-    43.9493,
-    4.8055,
-    'Julien',
-    'Martin',
-    '+33 4 90 00 00 00',
-    '98765432100032',
-    1,
-    0,
-    1
-  ).lastInsertRowid;
 
-  const insertOffer = db.prepare('INSERT INTO offers (producer_id, title, description, city) VALUES (?, ?, ?, ?)');
+  const insertOffer = db.prepare(
+    'INSERT INTO offers (producer_id, user_id, title, description, city) VALUES (?, ?, ?, ?, ?)'
+  );
   insertOffer.run(
     fermeNordId,
+    producerUserId,
     'Tomates bio en cagettes',
     'Cagettes de 10 kg de tomates plein champ disponibles chaque semaine.',
     'Lille'
   );
   insertOffer.run(
-    vergerSudId,
-    'Herbes aromatiques fraîches',
-    'Basilic, thym et romarin cueillis le matin même.',
-    'Avignon'
+    null,
+    buyerUserId,
+    'Recherche lots de laine brute',
+    'Acheteur intéressé par des lots réguliers pour transformation.',
+    'Grenoble'
   );
+};
+
+const ensureOfferOwners = () => {
+  ensureColumn('offers', 'user_id', 'INTEGER');
+
+  const fillOwnerStmt = db.prepare(
+    `UPDATE offers SET user_id = (SELECT user_id FROM producers WHERE producers.id = offers.producer_id)
+     WHERE user_id IS NULL`
+  );
+  fillOwnerStmt.run();
 };
 
 createTables();
 normalizeStoredSirets();
+ensureOfferOwners();
 seedDatabase();
 
 module.exports = db;

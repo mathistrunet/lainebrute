@@ -23,8 +23,9 @@ Configurez vos variables d'environnement à partir de `backend/.env.example` (po
 
 Des comptes de démonstration sont pré-créés lors du premier lancement de l'API :
 
-- Producteur : `producer@example.com` / `password123`
-- Administrateur : `admin@example.com` / `password123`
+- Acheteur : `mathtrunet100@gmail.com` / `mathtrunet100`
+- Producteur : `mathtrunet101@gmail.com` / `mathtrunet101`
+- Administrateur : `mathtrunet102@gmail.com` / `mathtrunet102`
 
 ## Communication front ↔ back
 
