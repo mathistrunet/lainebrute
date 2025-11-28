@@ -69,7 +69,12 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
       onClose?.();
       resetForm();
     } catch (loginError) {
-      setError(loginError.message || "Impossible de s'identifier");
+      const message = loginError.message || "Impossible de s'identifier";
+      if (message.toLowerCase().includes('email non vérifié')) {
+        setError('Email non vérifié. Consultez vos emails pour activer votre compte.');
+      } else {
+        setError(message);
+      }
     } finally {
       setStatus('idle');
     }
@@ -139,7 +144,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
         onUserChange?.({ ...user, profile });
       }
       setMode('login');
-      setMessage('Compte créé. Vous pouvez vous connecter.');
+      setMessage('Compte créé. Vérifiez vos emails pour activer votre compte.');
       resetForm();
     } catch (registerError) {
       setError(registerError.message || 'Inscription impossible');

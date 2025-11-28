@@ -131,6 +131,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password, role }),
     }),
+  verifyEmail: (token) => {
+    if (!token) {
+      return Promise.reject(new Error('Lien de vérification invalide.'));
+    }
+    return request(`/verify-email?token=${encodeURIComponent(token)}`);
+  },
   saveProfile: (email, profile) => saveProfile(email, profile),
   getProfile,
   verifySiret: (siret) => request(`/siret/${encodeURIComponent(siret ?? '')}`),

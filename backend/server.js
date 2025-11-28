@@ -152,7 +152,7 @@ const mailTransport = nodemailer.createTransport({
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
 const buildVerificationLink = (token) => {
-  const baseUrl = EMAIL_VERIFICATION_URL || `${BACKEND_BASE_URL}/api/verify-email`;
+  const baseUrl = EMAIL_VERIFICATION_URL || `${FRONTEND_ORIGIN}/verify-email`;
   return `${baseUrl}?token=${encodeURIComponent(token)}`;
 };
 
@@ -166,9 +166,9 @@ const sendVerificationEmail = async (recipient, token) => {
     from: EMAIL_FROM,
     to: recipient,
     subject: 'Vérifiez votre adresse email',
-    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant : ${verificationLink}`,
+    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationLink}`,
     html: `
-      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant :</p>
+      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
       <p><a href="${verificationLink}">${verificationLink}</a></p>
     `,
   };
