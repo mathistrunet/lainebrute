@@ -7,6 +7,7 @@ import ProducerDashboard from './pages/ProducerDashboard.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import TermsPage from './pages/TermsPage.jsx';
 import ContactPage from './pages/ContactPage.jsx';
+import VerifyEmailPage from './pages/VerifyEmail.jsx';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/conditions" element={<TermsPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Route>
     </Routes>
   );
