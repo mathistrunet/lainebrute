@@ -192,4 +192,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  sendContact: (body) =>
+    request('/contact', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
