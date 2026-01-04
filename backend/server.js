@@ -20,7 +20,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
 const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL || FRONTEND_ORIGIN;
 const PASSWORD_RESET_URL = process.env.PASSWORD_RESET_URL || FRONTEND_ORIGIN;
-const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'mathtrunet100@gmailcom';
+const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || process.env.SMTP_USER || 'mathtrunet102@gmail.com';
+const CONTACT_EMAIL_TO = process.env.CONTACT_EMAIL_TO || REPORT_EMAIL_TO;
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
@@ -280,6 +281,25 @@ const sendReportEmail = async ({ category, reason, contactEmail, target, documen
     `;
 
   await sendEmail({ recipient: REPORT_EMAIL_TO, subject, text, html, attachments });
+};
+
+const sendContactEmail = async ({ name, email, subject, message }) => {
+  const formattedSubject = `Contact - ${subject}`;
+  const text = [
+    `Nom: ${name}`,
+    `Email: ${email}`,
+    '',
+    'Message:',
+    message,
+  ].join('\n');
+  const html = `
+      <p><strong>Nom :</strong> ${name}</p>
+      <p><strong>Email :</strong> ${email}</p>
+      <p><strong>Message :</strong></p>
+      <p>${message}</p>
+    `;
+
+  await sendEmail({ recipient: CONTACT_EMAIL_TO, subject: formattedSubject, text, html });
 };
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
@@ -626,6 +646,37 @@ app.post('/api/reports', async (req, res) => {
   } catch (error) {
     console.error('Erreur report', error);
     return res.status(500).json({ error: "Impossible d'envoyer le signalement." });
+  }
+});
+
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body ?? {};
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Nom requis.' });
+    }
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ error: 'Email requis.' });
+    }
+    if (!subject || !String(subject).trim()) {
+      return res.status(400).json({ error: 'Sujet requis.' });
+    }
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: 'Message requis.' });
+    }
+
+    await sendContactEmail({
+      name: String(name).trim(),
+      email: String(email).trim(),
+      subject: String(subject).trim(),
+      message: String(message).trim(),
+    });
+
+    return res.json({ data: { message: 'Demande de contact envoyée.' } });
+  } catch (error) {
+    console.error('Erreur contact', error);
+    return res.status(500).json({ error: "Impossible d'envoyer la demande de contact." });
   }
 });
 

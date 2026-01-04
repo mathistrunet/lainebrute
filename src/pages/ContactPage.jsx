@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api } from '../api.js';
 
 function ContactPage() {
   const [formData, setFormData] = useState({
@@ -8,15 +9,24 @@ function ContactPage() {
     message: '',
   });
   const [status, setStatus] = useState('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((previous) => ({ ...previous, [name]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    setStatus('submitted');
+    setStatus('loading');
+    setErrorMessage('');
+    try {
+      await api.sendContact(formData);
+      setStatus('submitted');
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(error?.message || "Impossible d'envoyer votre message.");
+    }
   };
 
   return (
@@ -79,13 +89,20 @@ function ContactPage() {
           </label>
 
           <div className="form-actions">
-            <button type="submit">Envoyer la demande</button>
+            <button type="submit" disabled={status === 'loading'}>
+              {status === 'loading' ? 'Envoi en cours...' : 'Envoyer la demande'}
+            </button>
             <span className="helper-text">Aucun compte n&apos;est requis pour nous écrire.</span>
           </div>
 
           {status === 'submitted' && (
             <div className="contact-status" role="status">
               Merci, votre message a été enregistré. Un membre de l&apos;équipe vous répondra prochainement.
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="contact-status" role="status">
+              {errorMessage}
             </div>
           )}
         </form>
