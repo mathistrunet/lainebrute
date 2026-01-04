@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import IdentityPanel from './IdentityPanel.jsx';
 import { api } from '../api.js';
@@ -6,6 +6,7 @@ import logo from '../asset/laine-brute-logo.png';
 
 function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState(() => api.getCurrentUser());
   const [isIdentityPanelOpen, setIsIdentityPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState('login');
@@ -50,10 +51,16 @@ function Layout() {
     setIsAccountMenuOpen(false);
   };
 
+  const handleBrandClick = () => {
+    setIsAccountMenuOpen(false);
+    setIsIdentityPanelOpen(false);
+    navigate('/');
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
-        <Link to="/" className="brand" aria-label="Laine Brute">
+        <Link to="/" className="brand" aria-label="Laine Brute" onClick={handleBrandClick}>
           <img src={logo} alt="" className="brand__logo" aria-hidden="true" />
           <span>Laine Brute</span>
         </Link>
