@@ -3,6 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 
 const normalizeText = (value) => value?.trim().toLowerCase();
+const formatDate = (value) => {
+  if (!value) return 'Date inconnue';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString('fr-FR');
+};
 
 function ProducerProfilePage() {
   const { producerId } = useParams();
@@ -143,7 +151,7 @@ function ProducerProfilePage() {
           <p className="muted">{producer.city}</p>
         </div>
         <div className="section-header__actions">
-          {isOwner && (
+          {isOwner && isSelfView && (
             <Link to="/producteur" className="ghost">
               Gérer mon espace producteur
             </Link>
@@ -187,14 +195,21 @@ function ProducerProfilePage() {
             Retrouvez ci-dessous toutes les annonces publiées par cette exploitation.
           </p>
           <ul className="card-list">
-            {producerAds.map((ad) => (
-              <li key={ad.id} className="card">
-                <div className="eyebrow">Annonce producteur</div>
-                <h3>{ad.title}</h3>
-                <p>{ad.description}</p>
-                <p>Publié le : {ad.created_at}</p>
+            {producerAds.length ? (
+              producerAds.map((ad) => (
+                <li key={ad.id} className="card">
+                  <div className="eyebrow">Annonce producteur</div>
+                  <h3>{ad.title}</h3>
+                  <p>{ad.description || 'Pas de description fournie.'}</p>
+                  <p>Ville : {ad.city ?? producer.city ?? 'Ville inconnue'}</p>
+                  <p>Publié le : {formatDate(ad.created_at)}</p>
+                </li>
+              ))
+            ) : (
+              <li className="card">
+                <p>Aucune annonce disponible pour le moment.</p>
               </li>
-            ))}
+            )}
           </ul>
         </div>
       </div>
