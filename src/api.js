@@ -1,4 +1,8 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const NORMALIZED_API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
+const API_BASE_URL = NORMALIZED_API_BASE_URL.endsWith('/api')
+  ? NORMALIZED_API_BASE_URL
+  : `${NORMALIZED_API_BASE_URL}/api`;
 const TOKEN_STORAGE_KEY = 'lainebrute.jwt';
 const PROFILE_STORAGE_KEY = 'lainebrute.profiles';
 const runtime = typeof globalThis !== 'undefined' ? globalThis : {};
