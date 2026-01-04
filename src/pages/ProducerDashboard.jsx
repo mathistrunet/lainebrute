@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 
@@ -14,10 +14,13 @@ const emptyProfile = {
 
 function ProducerDashboard() {
   const currentUser = api.getCurrentUser();
-  const isAdmin = currentUser?.role === 'admin';
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserRole = currentUser?.role ?? null;
+  const isAdmin = currentUserRole === 'admin';
   const [profile, setProfile] = useState(emptyProfile);
   const [profileForm, setProfileForm] = useState(emptyProfile);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const profileFormRef = useRef(null);
   const [profileStatus, setProfileStatus] = useState('idle');
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
@@ -135,7 +138,7 @@ function ProducerDashboard() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (isAdmin || !currentUser) return;
+    if (isAdmin || !currentUserId) return;
     let isMounted = true;
 
     const loadProfile = async () => {
@@ -193,7 +196,7 @@ function ProducerDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [currentUser, isAdmin]);
+  }, [currentUserId, currentUserRole, isAdmin]);
 
   const handleProfileSave = async (event) => {
     event.preventDefault();
@@ -324,138 +327,153 @@ function ProducerDashboard() {
       <p>Gérez vos informations publiques et vos annonces produits.</p>
 
       <div className="grid-2-cols">
-        {isEditingProfile ? (
-          <form className="form-card" onSubmit={handleProfileSave}>
-            <div className="section-header">
-              <div>
-                <h2>Coordonnées et présentation</h2>
-                <p className="muted">Modifiez vos informations publiques puis enregistrez.</p>
-              </div>
+        <div className={isEditingProfile ? 'form-card' : 'card'}>
+          <div className="section-header">
+            <div>
+              <h2>Coordonnées et présentation</h2>
+              <p className="muted">
+                {isEditingProfile
+                  ? 'Modifiez vos informations publiques puis terminez.'
+                  : 'Ces informations sont visibles sur votre page producteur.'}
+              </p>
             </div>
-            <label>
-              Nom de l'exploitation
-              <input
-                type="text"
-                value={profileForm.name}
-                onChange={(event) => handleProfileChange('name', event.target.value)}
-                placeholder="Nom de l'exploitation"
-                required
-              />
-            </label>
-            <label>
-              Ville
-              <input
-                type="text"
-                value={profileForm.city}
-                onChange={(event) => handleProfileChange('city', event.target.value)}
-                placeholder="Ville"
-              />
-            </label>
-            <label>
-              Prénom
-              <input
-                type="text"
-                value={profileForm.first_name}
-                onChange={(event) => handleProfileChange('first_name', event.target.value)}
-                placeholder="Prénom"
-              />
-            </label>
-            <label>
-              Nom
-              <input
-                type="text"
-                value={profileForm.last_name}
-                onChange={(event) => handleProfileChange('last_name', event.target.value)}
-                placeholder="Nom"
-              />
-            </label>
-            <label>
-              Téléphone
-              <input
-                type="tel"
-                value={profileForm.phone}
-                onChange={(event) => handleProfileChange('phone', event.target.value)}
-                placeholder="06 xx xx xx xx"
-              />
-            </label>
-            <label>
-              SIRET
-              <input
-                type="text"
-                value={profileForm.siret}
-                onChange={(event) => handleProfileChange('siret', event.target.value)}
-                placeholder="14 chiffres"
-                required
-              />
-            </label>
-            <label>
-              Description de l'exploitation
-              <textarea
-                rows="3"
-                value={profileForm.description}
-                onChange={(event) => handleProfileChange('description', event.target.value)}
-                placeholder="Expliquez votre élevage, vos pratiques..."
-              />
-            </label>
-            <p className="helper-text">Ces informations sont visibles sur votre page producteur.</p>
-            {profileError && <p className="error">{profileError}</p>}
-            {profileMessage && <p className="success">{profileMessage}</p>}
-            <div className="form-actions">
-              <button type="submit" disabled={profileStatus === 'saving'}>
-                {profileStatus === 'saving' ? 'Enregistrement...' : 'Enregistrer et quitter'}
+            <div className="section-header__actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setIsEditingProfile(true)}
+                aria-label="Modifier les informations"
+                disabled={isEditingProfile}
+              >
+                ✏️
               </button>
-              <button type="button" className="ghost" onClick={handleProfileCancel}>
-                Annuler
-              </button>
+              {isEditingProfile && (
+                <button
+                  type="button"
+                  onClick={() => profileFormRef.current?.requestSubmit()}
+                  disabled={profileStatus === 'saving'}
+                >
+                  {profileStatus === 'saving' ? 'Enregistrement...' : 'Terminé'}
+                </button>
+              )}
             </div>
-          </form>
-        ) : (
-          <div className="card">
-            <div className="section-header">
-              <div>
-                <h2>Coordonnées et présentation</h2>
-                <p className="muted">Ces informations sont visibles sur votre page producteur.</p>
-              </div>
-              <button type="button" className="ghost" onClick={() => setIsEditingProfile(true)}>
-                Modifier
-              </button>
-            </div>
-            {profileError && <p className="error">{profileError}</p>}
-            {profileMessage && <p className="success">{profileMessage}</p>}
-            {profileStatus === 'loading' ? (
-              <p className="muted">Chargement du profil...</p>
-            ) : (
-              <dl className="description-list">
-                <div>
-                  <dt>Exploitation</dt>
-                  <dd>{profile.name || 'Non renseigné'}</dd>
-                </div>
-                <div>
-                  <dt>Ville</dt>
-                  <dd>{profile.city || 'Non renseigné'}</dd>
-                </div>
-                <div>
-                  <dt>Contact</dt>
-                  <dd>
-                    <div>
-                      {[profile.first_name, profile.last_name].filter(Boolean).join(' ') ||
-                        'Non renseigné'}
-                    </div>
-                    <div>{profile.phone || 'Non renseigné'}</div>
-                  </dd>
-                </div>
-                <div>
-                  <dt>SIRET</dt>
-                  <dd>{profile.siret || 'Non renseigné'}</dd>
-                </div>
-                <div>
-                  <dt>Description</dt>
-                  <dd>{profile.description || 'Ajoutez un texte de présentation.'}</dd>
-                </div>
-              </dl>
-            )}
           </div>
-        )}
+
+          {isEditingProfile ? (
+            <form ref={profileFormRef} onSubmit={handleProfileSave}>
+              <label>
+                Nom de l'exploitation
+                <input
+                  type="text"
+                  value={profileForm.name}
+                  onChange={(event) => handleProfileChange('name', event.target.value)}
+                  placeholder="Nom de l'exploitation"
+                  required
+                />
+              </label>
+              <label>
+                Ville
+                <input
+                  type="text"
+                  value={profileForm.city}
+                  onChange={(event) => handleProfileChange('city', event.target.value)}
+                  placeholder="Ville"
+                />
+              </label>
+              <label>
+                Prénom
+                <input
+                  type="text"
+                  value={profileForm.first_name}
+                  onChange={(event) => handleProfileChange('first_name', event.target.value)}
+                  placeholder="Prénom"
+                />
+              </label>
+              <label>
+                Nom
+                <input
+                  type="text"
+                  value={profileForm.last_name}
+                  onChange={(event) => handleProfileChange('last_name', event.target.value)}
+                  placeholder="Nom"
+                />
+              </label>
+              <label>
+                Téléphone
+                <input
+                  type="tel"
+                  value={profileForm.phone}
+                  onChange={(event) => handleProfileChange('phone', event.target.value)}
+                  placeholder="06 xx xx xx xx"
+                />
+              </label>
+              <label>
+                SIRET
+                <input
+                  type="text"
+                  value={profileForm.siret}
+                  onChange={(event) => handleProfileChange('siret', event.target.value)}
+                  placeholder="14 chiffres"
+                  required
+                />
+              </label>
+              <label>
+                Description de l'exploitation
+                <textarea
+                  rows="3"
+                  value={profileForm.description}
+                  onChange={(event) => handleProfileChange('description', event.target.value)}
+                  placeholder="Expliquez votre élevage, vos pratiques..."
+                />
+              </label>
+              <p className="helper-text">Ces informations sont visibles sur votre page producteur.</p>
+              {profileError && <p className="error">{profileError}</p>}
+              {profileMessage && <p className="success">{profileMessage}</p>}
+              <div className="form-actions">
+                <button type="button" className="ghost" onClick={handleProfileCancel}>
+                  Annuler
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              {profileError && <p className="error">{profileError}</p>}
+              {profileMessage && <p className="success">{profileMessage}</p>}
+              {profileStatus === 'loading' ? (
+                <p className="muted">Chargement du profil...</p>
+              ) : (
+                <dl className="description-list">
+                  <div>
+                    <dt>Exploitation</dt>
+                    <dd>{profile.name || 'Non renseigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Ville</dt>
+                    <dd>{profile.city || 'Non renseigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Contact</dt>
+                    <dd>
+                      <div>
+                        {[profile.first_name, profile.last_name].filter(Boolean).join(' ') ||
+                          'Non renseigné'}
+                      </div>
+                      <div>{profile.phone || 'Non renseigné'}</div>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>SIRET</dt>
+                    <dd>{profile.siret || 'Non renseigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Description</dt>
+                    <dd>{profile.description || 'Ajoutez un texte de présentation.'}</dd>
+                  </div>
+                </dl>
+              )}
+            </>
+          )}
+        </div>
 
         <div className="card">
           <h2>Résumé public</h2>
