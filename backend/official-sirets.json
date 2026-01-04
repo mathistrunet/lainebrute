@@ -1,7 +1,0 @@
-[
-  { "siret": "12345678900017", "name": "Ferme du Nord", "city": "Lille" },
-  { "siret": "98765432100032", "name": "Les Jardins Provençaux", "city": "Avignon" },
-  { "siret": "56204978400027", "name": "GAEC du Plateau", "city": "Aurillac" },
-  { "siret": "80234561900046", "name": "Bergerie des Cimes", "city": "Gap" },
-  { "siret": "41190867500053", "name": "Ferme des Vallons", "city": "Rennes" }
-]
