@@ -85,6 +85,8 @@ const createTables = () => {
   ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('users', 'verification_token', 'TEXT');
   ensureColumn('users', 'verification_token_expires_at', 'TEXT');
+  ensureColumn('users', 'password_reset_token', 'TEXT');
+  ensureColumn('users', 'password_reset_token_expires_at', 'TEXT');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS offers (

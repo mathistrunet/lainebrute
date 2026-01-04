@@ -107,7 +107,9 @@ async function request(path, options = {}) {
       storeToken(null);
     }
     const message = payload?.error ?? response.statusText;
-    throw new Error(message || 'Erreur inconnue');
+    const error = new Error(message || 'Erreur inconnue');
+    error.details = payload?.data ?? payload ?? null;
+    throw error;
   }
 
   return payload?.data ?? payload ?? null;
@@ -144,8 +146,10 @@ export const api = {
     if (!email) {
       throw new Error('Adresse email requise.');
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return { ok: true };
+    return request('/password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
   },
   logout: () => storeToken(null),
   getProducers: () => request('/producers'),
