@@ -34,8 +34,12 @@ const updateUserResetTokenStmt = db.prepare(
   'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?'
 );
 const findUserByVerificationTokenStmt = db.prepare('SELECT * FROM users WHERE verification_token = ?');
+const findUserByResetTokenStmt = db.prepare('SELECT * FROM users WHERE password_reset_token = ?');
 const verifyUserStmt = db.prepare(
   'UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?'
+);
+const updateUserPasswordStmt = db.prepare(
+  'UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_token_expires_at = NULL WHERE id = ?'
 );
 const deleteUserByIdStmt = db.prepare('DELETE FROM users WHERE id = ?');
 const listProducersStmt = db.prepare(`
@@ -560,6 +564,37 @@ app.post('/api/password-reset', async (req, res) => {
   } catch (error) {
     console.error('Erreur password-reset', error);
     return res.status(500).json({ error: "Impossible de traiter la demande." });
+  }
+});
+
+app.post('/api/password-reset/confirm', async (req, res) => {
+  try {
+    const { token, password } = req.body ?? {};
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token et mot de passe requis.' });
+    }
+
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' });
+    }
+
+    const user = findUserByResetTokenStmt.get(token);
+    if (!user || !user.password_reset_token_expires_at) {
+      return res.status(400).json({ error: 'Lien de réinitialisation invalide.' });
+    }
+
+    const expiresAt = new Date(user.password_reset_token_expires_at).getTime();
+    if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
+      return res.status(400).json({ error: 'Lien de réinitialisation expiré.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    updateUserPasswordStmt.run(passwordHash, user.id);
+
+    return res.json({ data: { message: 'Mot de passe mis à jour.' } });
+  } catch (error) {
+    console.error('Erreur password-reset-confirm', error);
+    return res.status(500).json({ error: "Impossible de réinitialiser le mot de passe." });
   }
 });
 

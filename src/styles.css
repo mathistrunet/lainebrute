@@ -494,10 +494,21 @@ button {
   font-weight: 600;
 }
 
-button.ghost {
+button.ghost,
+a.ghost {
   background: transparent;
   color: #1b4332;
   border: 1px solid #1b4332;
+}
+
+a.ghost {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 .ghost--light {
