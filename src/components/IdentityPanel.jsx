@@ -22,6 +22,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [emailDelivery, setEmailDelivery] = useState(null);
 
   const isProducer = role === 'producer';
 
@@ -48,6 +49,17 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setError('');
   };
 
+  const formatEmailDelivery = (delivery) => {
+    if (!delivery) {
+      return null;
+    }
+    if (delivery.sent) {
+      return `Email envoyé à ${delivery.to}.`;
+    }
+    const reason = delivery.error ? ` (${delivery.error})` : '';
+    return `Email non envoyé à ${delivery.to}.${reason}`;
+  };
+
   const updateUserProfile = (baseUser, profile) => {
     const updatedProfile = api.saveProfile(baseUser?.email ?? email, profile);
     return baseUser ? { ...baseUser, profile: updatedProfile } : null;
@@ -58,6 +70,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setStatus('loading');
     setError('');
     setMessage('');
+    setEmailDelivery(null);
     try {
       const loggedUser = await api.login(email.trim(), password.trim());
       const profile = api.getProfile(loggedUser?.email ?? email);
@@ -84,6 +97,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setStatus('loading');
     setError('');
     setMessage('');
+    setEmailDelivery(null);
 
     if (password !== confirmPassword) {
       setStatus('idle');
@@ -98,7 +112,8 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
 
     try {
-      await api.register(email.trim(), password.trim(), role);
+      const result = await api.register(email.trim(), password.trim(), role);
+      const delivery = result?.emailDelivery ?? null;
       updateUserProfile(user, {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -113,8 +128,10 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
       }
       setMode('login');
       setMessage('Compte créé. Vérifiez vos emails pour activer votre compte.');
+      setEmailDelivery(delivery);
       resetForm();
     } catch (registerError) {
+      setEmailDelivery(registerError.details?.emailDelivery ?? null);
       setError(registerError.message || 'Inscription impossible');
     } finally {
       setStatus('idle');
@@ -126,13 +143,19 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setStatus('loading');
     setError('');
     setMessage('');
+    setEmailDelivery(null);
     try {
-      await api.requestPasswordReset(email.trim());
-      setMessage(
-        'Un email de récupération sera envoyé si un compte correspond à cette adresse.'
-      );
+      const result = await api.requestPasswordReset(email.trim());
+      const delivery = result?.emailDelivery ?? null;
+      setEmailDelivery(delivery);
+      if (delivery?.sent) {
+        setMessage(`Email de récupération envoyé à ${delivery.to}.`);
+      } else {
+        setError(delivery?.error || 'Impossible de traiter la demande.');
+      }
       setMode('login');
     } catch (forgotError) {
+      setEmailDelivery(forgotError.details?.emailDelivery ?? null);
       setError(forgotError.message || 'Impossible de traiter la demande.');
     } finally {
       setStatus('idle');
@@ -153,6 +176,8 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     : mode === 'register'
       ? 'Créez votre compte'
       : 'Accédez à vos espaces';
+  const emailDeliveryMessage = formatEmailDelivery(emailDelivery);
+  const emailDeliveryHasError = emailDeliveryMessage && !emailDelivery?.sent;
 
   return (
     <section className="identity-panel">
@@ -241,6 +266,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             </button>
           </div>
           {error && <p className="error">{error}</p>}
+          {emailDeliveryMessage && (
+            <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
+          )}
           {message && !error && <p className="success">{message}</p>}
         </form>
       )}
@@ -266,6 +294,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             </button>
           </div>
           {error && <p className="error">{error}</p>}
+          {emailDeliveryMessage && (
+            <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
+          )}
           {message && !error && <p className="success">{message}</p>}
         </form>
       )}
@@ -389,6 +420,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             </small>
           </div>
           {error && <p className="error">{error}</p>}
+          {emailDeliveryMessage && (
+            <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
+          )}
           {message && !error && <p className="success">{message}</p>}
         </form>
       )}

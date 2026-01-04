@@ -19,6 +19,7 @@ const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${POR
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
 const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL || FRONTEND_ORIGIN;
+const PASSWORD_RESET_URL = process.env.PASSWORD_RESET_URL || FRONTEND_ORIGIN;
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'mathtrunet100@gmailcom';
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
@@ -28,6 +29,9 @@ const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
 const updateUserVerificationStmt = db.prepare(
   'UPDATE users SET verification_token = ?, verification_token_expires_at = ?, email_verified = 0 WHERE id = ?'
+);
+const updateUserResetTokenStmt = db.prepare(
+  'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?'
 );
 const findUserByVerificationTokenStmt = db.prepare('SELECT * FROM users WHERE verification_token = ?');
 const verifyUserStmt = db.prepare(
@@ -148,6 +152,11 @@ const buildVerificationLink = (token) => {
   return `${baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
 };
 
+const buildPasswordResetLink = (token) => {
+  const baseUrl = PASSWORD_RESET_URL.replace(/\/$/, '');
+  return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+};
+
 // Centralise la lecture de la configuration SMTP depuis les variables d'environnement.
 const getSmtpConfig = () => ({
   host: process.env.SMTP_HOST,
@@ -174,35 +183,50 @@ const validateSmtpConfig = () => {
   return { host, port, user, pass };
 };
 
-const sendVerificationEmail = async (recipient, verificationUrl) => {
-  // En dehors de la production, on n'envoie pas d'email : on log uniquement le lien.
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`Lien de vérification pour ${recipient} : ${verificationUrl}`);
-    return;
-  }
-
-  // En production, on exige une configuration SMTP complète.
+const createMailTransport = () => {
   const smtpConfig = validateSmtpConfig();
-
-  const mailTransport = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: smtpConfig.host,
     port: smtpConfig.port,
     secure: smtpConfig.port === 465,
     auth: { user: smtpConfig.user, pass: smtpConfig.pass },
   });
+};
 
+const sendEmail = async ({ recipient, subject, text, html, attachments = [] }) => {
+  const mailTransport = createMailTransport();
   const message = {
     from: EMAIL_FROM,
     to: recipient,
-    subject: 'Vérifiez votre adresse email',
-    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationUrl}`,
-    html: `
-      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
-      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
-    `,
+    subject,
+    text,
+    html,
+    attachments,
   };
 
   await mailTransport.sendMail(message);
+  return { sent: true, to: recipient };
+};
+
+const sendVerificationEmail = async (recipient, verificationUrl) => {
+  const subject = 'Vérifiez votre adresse email';
+  const text = `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationUrl}`;
+  const html = `
+      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
+      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
+    `;
+
+  return sendEmail({ recipient, subject, text, html });
+};
+
+const sendPasswordResetEmail = async (recipient, resetUrl) => {
+  const subject = 'Réinitialisez votre mot de passe';
+  const text = `Vous avez demandé une réinitialisation de mot de passe. Cliquez sur ce lien (valide 24h) : ${resetUrl}`;
+  const html = `
+      <p>Vous avez demandé une réinitialisation de mot de passe. Cliquez sur ce lien (valide 24h) :</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+    `;
+  return sendEmail({ recipient, subject, text, html });
 };
 
 const REPORT_CATEGORIES = new Map([
@@ -225,10 +249,6 @@ const formatReportTarget = (target) => {
 };
 
 const sendReportEmail = async ({ category, reason, contactEmail, target, documents = [] }) => {
-  if (!process.env.SMTP_HOST) {
-    throw new Error('SMTP non configuré : veuillez renseigner SMTP_HOST');
-  }
-
   const subject = `${REPORT_CATEGORIES.get(category) ?? 'Signalement'} - Laine Brute`;
   const formattedTarget = formatReportTarget(target);
   const attachments = documents
@@ -239,29 +259,23 @@ const sendReportEmail = async ({ category, reason, contactEmail, target, documen
       contentType: doc.type || 'application/octet-stream',
     }));
 
-  const message = {
-    from: EMAIL_FROM,
-    to: REPORT_EMAIL_TO,
-    subject,
-    text: [
-      `Type: ${REPORT_CATEGORIES.get(category) ?? category}`,
-      `Cible: ${formattedTarget}`,
-      `Email contact: ${contactEmail ?? 'Non renseigné'}`,
-      '',
-      'Motif:',
-      reason,
-    ].join('\n'),
-    html: `
+  const text = [
+    `Type: ${REPORT_CATEGORIES.get(category) ?? category}`,
+    `Cible: ${formattedTarget}`,
+    `Email contact: ${contactEmail ?? 'Non renseigné'}`,
+    '',
+    'Motif:',
+    reason,
+  ].join('\n');
+  const html = `
       <p><strong>Type :</strong> ${REPORT_CATEGORIES.get(category) ?? category}</p>
       <p><strong>Cible :</strong> ${formattedTarget}</p>
       <p><strong>Email contact :</strong> ${contactEmail ?? 'Non renseigné'}</p>
       <p><strong>Motif :</strong></p>
       <p>${reason}</p>
-    `,
-    attachments,
-  };
+    `;
 
-  await mailTransport.sendMail(message);
+  await sendEmail({ recipient: REPORT_EMAIL_TO, subject, text, html, attachments });
 };
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
@@ -423,20 +437,31 @@ app.post('/api/register', async (req, res) => {
     updateUserVerificationStmt.run(verificationToken, expiresAt, result.lastInsertRowid);
 
     const verificationUrl = buildVerificationLink(verificationToken);
+    let emailDelivery = null;
 
     try {
-      await sendVerificationEmail(email, verificationUrl);
+      emailDelivery = await sendVerificationEmail(email, verificationUrl);
     } catch (sendError) {
       console.error('Erreur envoi email de vérification', sendError);
       deleteUserByIdStmt.run(result.lastInsertRowid);
+      emailDelivery = {
+        sent: false,
+        to: email,
+        error: sendError?.message || "Impossible d'envoyer l'email de vérification.",
+      };
       return res
         .status(500)
-        .json({ error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer." });
+        .json({
+          error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer.",
+          data: { emailDelivery },
+        });
     }
 
     res
       .status(201)
-      .json({ data: { id: result.lastInsertRowid, email, role, emailVerified: false } });
+      .json({
+        data: { id: result.lastInsertRowid, email, role, emailVerified: false, emailDelivery },
+      });
   } catch (error) {
     console.error('Erreur register', error);
     res.status(500).json({ error: "Impossible de créer l'utilisateur." });
@@ -486,6 +511,55 @@ app.get('/api/verify-email', (req, res) => {
   } catch (error) {
     console.error('Erreur verify-email', error);
     res.status(500).json({ error: "Impossible de vérifier cet email." });
+  }
+});
+
+app.post('/api/password-reset', async (req, res) => {
+  try {
+    const { email } = req.body ?? {};
+    if (!email) {
+      return res.status(400).json({ error: 'Adresse email requise.' });
+    }
+
+    const user = findUserByEmailStmt.get(email);
+    if (!user) {
+      return res.json({
+        data: {
+          emailDelivery: {
+            sent: false,
+            to: email,
+            error: "Aucun compte associé à cette adresse.",
+          },
+        },
+      });
+    }
+
+    const resetToken = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
+    updateUserResetTokenStmt.run(resetToken, expiresAt, user.id);
+
+    const resetUrl = buildPasswordResetLink(resetToken);
+    let emailDelivery = null;
+
+    try {
+      emailDelivery = await sendPasswordResetEmail(email, resetUrl);
+    } catch (sendError) {
+      console.error('Erreur envoi email de réinitialisation', sendError);
+      emailDelivery = {
+        sent: false,
+        to: email,
+        error: sendError?.message || "Impossible d'envoyer l'email de réinitialisation.",
+      };
+      return res.status(500).json({
+        error: "Impossible d'envoyer l'email de réinitialisation. Veuillez réessayer.",
+        data: { emailDelivery },
+      });
+    }
+
+    return res.json({ data: { emailDelivery } });
+  } catch (error) {
+    console.error('Erreur password-reset', error);
+    return res.status(500).json({ error: "Impossible de traiter la demande." });
   }
 });
 
