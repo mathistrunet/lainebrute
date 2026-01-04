@@ -37,6 +37,7 @@ const mockAds = [
     producer: 'Atelier des Cimes',
   },
 ];
+import { ads, producers } from '../data/marketData.js';
 
 function AdsPage() {
   const [sortBy, setSortBy] = useState('date');
@@ -44,20 +45,27 @@ function AdsPage() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
 
+  const producerById = useMemo(
+    () => new Map(producers.map((producer) => [producer.id, producer])),
+    []
+  );
+
   const availableCities = useMemo(
-    () => ['', ...new Set(mockAds.map((ad) => ad.city))],
-    [],
+    () => ['', ...new Set(ads.map((ad) => ad.city).filter(Boolean))],
+    []
   );
 
   const sortedAndFilteredAds = useMemo(() => {
-    const filtered = mockAds.filter((ad) => (cityFilter ? ad.city === cityFilter : true));
+    const filtered = ads.filter((ad) => (cityFilter ? ad.city === cityFilter : true));
 
     const sorter = sortBy === 'distance'
-      ? (a, b) => a.distanceKm - b.distanceKm
+      ? (a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0)
       : (a, b) => new Date(a.availableFrom) - new Date(b.availableFrom);
 
-    return [...filtered].sort(sorter);
-  }, [cityFilter, sortBy]);
+    return [...filtered]
+      .map((ad) => ({ ...ad, producer: producerById.get(ad.producerId) }))
+      .sort(sorter);
+  }, [cityFilter, sortBy, producerById]);
 
   const openReportDialog = (ad) => {
     setReportContext({
@@ -74,8 +82,8 @@ function AdsPage() {
     <section>
       <h1>Annonces</h1>
       <p>
-        Consultez toutes les annonces publiées par les producteurs : titres, catégories « laine », race, et
-        dates de disponibilité à partir d'une période donnée.
+        Retrouvez toutes les propositions de vente de laine : une annonce correspond à un type de laine
+        pour une exploitation. Chaque producteur peut donc publier plusieurs annonces.
       </p>
 
       <div className="filters-bar">
@@ -107,7 +115,8 @@ function AdsPage() {
             <p>Race : {ad.race}</p>
             <p>Disponible à partir du : {ad.availableFrom}</p>
             <p>
-              Producteur : {ad.producer} — {ad.city} ({ad.distanceKm} km)
+              Producteur : {ad.producer?.name ?? 'Producteur'} — {ad.producer?.city ?? ad.city}
+              {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
             </p>
             <div className="card__actions">
               <Link to="/producteur" className="ghost">
@@ -117,6 +126,9 @@ function AdsPage() {
                 Signaler
               </button>
             </div>
+            <Link to={`/producteurs/${ad.producerId}`} className="ghost">
+              Voir la page du producteur
+            </Link>
           </li>
         ))}
       </ul>
