@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CityAutocomplete from '../components/CityAutocomplete.jsx';
 import { SimpleMap } from '../lib/simpleMap.js';
 import { api } from '../api.js';
+import ReportDialog from '../components/ReportDialog.jsx';
 
 const fallbackProducers = [
   {
@@ -49,6 +50,9 @@ function MapPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [userLocation, setUserLocation] = useState(null);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportContext, setReportContext] = useState(null);
+  const [reportDefaultCategory, setReportDefaultCategory] = useState('producer');
   const highlightTimeoutRef = useRef(null);
   const itemRefs = useRef(new Map());
 
@@ -178,6 +182,17 @@ function MapPage() {
   }, [markers, activeProducerId, focusOnProducer, userLocation]);
 
   const handleLocate = (producer) => focusOnProducer(producer);
+
+  const openReportDialog = (producer, defaultCategory = 'producer') => {
+    setReportContext({
+      type: 'producer',
+      id: producer.id,
+      name: producer.name,
+      city: producer.city,
+    });
+    setReportDefaultCategory(defaultCategory);
+    setIsReportOpen(true);
+  };
 
   const registerItemRef = useCallback((id) => (node) => {
     if (!itemRefs.current) return;
@@ -320,6 +335,16 @@ function MapPage() {
                     <button type="button" className="ghost" onClick={() => handleLocate(producer)}>
                       Localiser
                     </button>
+                    <button type="button" className="ghost" onClick={() => openReportDialog(producer)}>
+                      Signaler
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => openReportDialog(producer, 'claim')}
+                    >
+                      Revendiquer
+                    </button>
                   </div>
                 </li>
               ))}
@@ -327,6 +352,12 @@ function MapPage() {
           </aside>
         </div>
       </div>
+      <ReportDialog
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        context={reportContext}
+        defaultCategory={reportDefaultCategory}
+      />
     </section>
   );
 }
