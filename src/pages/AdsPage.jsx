@@ -119,9 +119,6 @@ function AdsPage() {
               {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
             </p>
             <div className="card__actions">
-              <Link to="/producteur" className="ghost">
-                Voir la page du producteur
-              </Link>
               <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
                 Signaler
               </button>
