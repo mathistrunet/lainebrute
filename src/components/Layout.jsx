@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import IdentityPanel from './IdentityPanel.jsx';
 import { api } from '../api.js';
+import logo from '../asset/laine-brute-logo.png';
 
 function Layout() {
   const location = useLocation();
@@ -52,7 +53,10 @@ function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand">Laine Brute</div>
+        <Link to="/" className="brand" aria-label="Laine Brute">
+          <img src={logo} alt="" className="brand__logo" aria-hidden="true" />
+          <span>Laine Brute</span>
+        </Link>
         <nav className="nav-links">
           {links.map((link) => (
             <Link
