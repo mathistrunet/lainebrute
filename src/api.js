@@ -1,5 +1,9 @@
 const runtime = typeof globalThis !== 'undefined' ? globalThis : {};
-const DEFAULT_API_ORIGIN = runtime.location?.origin ?? 'http://localhost:4000';
+const isViteDevHost =
+  runtime.location?.hostname === 'localhost' && runtime.location?.port === '5173';
+const DEFAULT_API_ORIGIN = isViteDevHost
+  ? 'http://localhost:4000'
+  : runtime.location?.origin ?? 'http://localhost:4000';
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? DEFAULT_API_ORIGIN;
 const NORMALIZED_API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 const API_BASE_URL = NORMALIZED_API_BASE_URL.endsWith('/api')
