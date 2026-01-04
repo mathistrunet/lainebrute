@@ -163,12 +163,21 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   };
 
   const handleResendVerification = async () => {
+    const requestedEmail = window.prompt(
+      "À quelle adresse souhaitez-vous renvoyer l'email d'activation ?",
+      email.trim()
+    );
+    const targetEmail = requestedEmail?.trim();
+    if (!targetEmail) {
+      return;
+    }
     setStatus('loading');
     setError('');
     setMessage('');
     setEmailDelivery(null);
+    setEmail(targetEmail);
     try {
-      const result = await api.resendVerificationEmail(email.trim());
+      const result = await api.resendVerificationEmail(targetEmail);
       const delivery = result?.emailDelivery ?? null;
       setEmailDelivery(delivery);
       if (delivery?.sent) {
