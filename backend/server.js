@@ -538,6 +538,66 @@ app.get('/api/verify-email', (req, res) => {
   }
 });
 
+app.post('/api/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body ?? {};
+    if (!email) {
+      return res.status(400).json({ error: 'Adresse email requise.' });
+    }
+
+    const user = findUserByEmailStmt.get(email);
+    if (!user) {
+      return res.json({
+        data: {
+          emailDelivery: {
+            sent: false,
+            to: email,
+            error: "Aucun compte associé à cette adresse.",
+          },
+        },
+      });
+    }
+
+    if (user.email_verified) {
+      return res.json({
+        data: {
+          emailDelivery: {
+            sent: false,
+            to: email,
+            error: 'Cet email est déjà vérifié.',
+          },
+        },
+      });
+    }
+
+    const verificationToken = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
+    updateUserVerificationStmt.run(verificationToken, expiresAt, user.id);
+    const verificationUrl = buildVerificationLink(verificationToken);
+
+    let emailDelivery = null;
+    try {
+      emailDelivery = await sendVerificationEmail(email, verificationUrl);
+    } catch (sendError) {
+      console.error('Erreur envoi email de vérification', sendError);
+      emailDelivery = {
+        sent: false,
+        to: email,
+        error: sendError?.message || "Impossible d'envoyer l'email de vérification.",
+      };
+      return res.status(500).json({
+        error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer.",
+        data: { emailDelivery },
+      });
+    }
+
+    return res.json({ data: { emailDelivery } });
+  } catch (error) {
+    console.error('Erreur resend-verification', error);
+    return res.status(500).json({ error: "Impossible d'envoyer l'email de vérification." });
+  }
+});
+
 app.post('/api/password-reset', async (req, res) => {
   try {
     const { email } = req.body ?? {};
