@@ -193,6 +193,14 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteAdminUser: (userId) => request(`/admin/users/${userId}`, { method: 'DELETE' }),
+  getAdminProducers: () => request('/admin/producers'),
+  updateAdminProducer: (producerId, body) =>
+    request(`/admin/producers/${producerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminProducer: (producerId) =>
+    request(`/admin/producers/${producerId}`, { method: 'DELETE' }),
   getAdminOffers: () => request('/admin/offers'),
   getAdminDatabase: () => request('/admin/database'),
   getAdminTraffic: () => request('/admin/traffic'),
