@@ -39,6 +39,24 @@ const fallbackProducers = [
   },
 ];
 
+const cityCoordinates = {
+  Lyon: { lat: 45.764, lng: 4.8357 },
+  'Clermont-Ferrand': { lat: 45.7772, lng: 3.0870 },
+  Grenoble: { lat: 45.1885, lng: 5.7245 },
+};
+
+const resolveProducerCoordinates = (producer) => {
+  if (!producer) return null;
+  if (Number.isFinite(producer.lat) && Number.isFinite(producer.lng)) {
+    return { lat: producer.lat, lng: producer.lng };
+  }
+  const city = producer.city?.trim();
+  if (city && cityCoordinates[city]) {
+    return cityCoordinates[city];
+  }
+  return null;
+};
+
 function MapPage() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -110,16 +128,20 @@ function MapPage() {
   const markers = useMemo(
     () =>
       producers
-        .filter((producer) => Number.isFinite(producer?.lat) && Number.isFinite(producer?.lng))
-        .map((producer) => ({
-          id: producer.id ?? `${producer.lat}:${producer.lng}`,
-          name: producer.name ?? producer.title ?? 'Producteur',
-          city: producer.city,
-          lat: producer.lat,
-          lng: producer.lng,
-          quantity: producer.quantity,
-          status: producer.status,
-        })),
+        .map((producer) => {
+          const coordinates = resolveProducerCoordinates(producer);
+          if (!coordinates) return null;
+          return {
+            id: producer.id ?? `${coordinates.lat}:${coordinates.lng}`,
+            name: producer.name ?? producer.title ?? 'Producteur',
+            city: producer.city,
+            lat: coordinates.lat,
+            lng: coordinates.lng,
+            quantity: producer.quantity,
+            status: producer.status,
+          };
+        })
+        .filter(Boolean),
     [producers]
   );
 
