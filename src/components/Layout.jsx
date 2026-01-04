@@ -20,11 +20,13 @@ function Layout() {
       return commonLinks;
     }
 
-    if (user.role === 'producer' || user.role === 'admin') {
+    if (user.role === 'producer') {
       commonLinks.push({ to: '/producteur', label: 'Espace producteur' });
+      commonLinks.push({ to: '/producteur/ma-page', label: 'Ma page producteur' });
     }
 
     if (user.role === 'admin') {
+      commonLinks.push({ to: '/producteur', label: 'Espace producteur' });
       commonLinks.push({ to: '/admin', label: 'Admin' });
     }
 

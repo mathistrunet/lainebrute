@@ -22,7 +22,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [siretStatus, setSiretStatus] = useState({ state: 'idle', detail: '' });
 
   const isProducer = role === 'producer';
 
@@ -80,29 +79,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
   };
 
-  const verifySiret = async (value) => {
-    if (!value) {
-      setSiretStatus({ state: 'error', detail: 'Renseignez un numéro de SIRET.' });
-      return null;
-    }
-    setSiretStatus({ state: 'loading', detail: "Consultation de l'annuaire..." });
-    try {
-      const result = await api.verifySiret(value);
-      if (result?.valid) {
-        setSiretStatus({
-          state: 'valid',
-          detail: result.entreprise ?? 'Exploitation agricole vérifiée.',
-        });
-        return result;
-      }
-      setSiretStatus({ state: 'error', detail: "SIRET introuvable dans l'annuaire." });
-      return null;
-    } catch (verificationError) {
-      setSiretStatus({ state: 'error', detail: verificationError.message });
-      return null;
-    }
-  };
-
   const handleRegister = async (event) => {
     event.preventDefault();
     setStatus('loading');
@@ -122,14 +98,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
 
     try {
-      if (isProducer) {
-        const siretResult = await verifySiret(siret.trim());
-        if (!siretResult) {
-          setStatus('idle');
-          return;
-        }
-      }
-
       await api.register(email.trim(), password.trim(), role);
       updateUserProfile(user, {
         firstName: firstName.trim(),
@@ -360,28 +328,13 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
               </label>
               <label>
                 Numéro de SIRET
-                <div className="input-with-action">
-                  <input
-                    type="text"
-                    value={siret}
-                    onChange={(event) => setSiret(event.target.value)}
-                    required={isProducer}
-                    placeholder="14 chiffres"
-                  />
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => verifySiret(siret.trim())}
-                    disabled={siretStatus.state === 'loading'}
-                  >
-                    {siretStatus.state === 'loading' ? 'Vérification...' : 'Vérifier'}
-                  </button>
-                </div>
-                {siretStatus.detail && (
-                  <small className={siretStatus.state === 'valid' ? 'success' : 'error'}>
-                    {siretStatus.detail}
-                  </small>
-                )}
+                <input
+                  type="text"
+                  value={siret}
+                  onChange={(event) => setSiret(event.target.value)}
+                  required={isProducer}
+                  placeholder="14 chiffres"
+                />
               </label>
             </div>
           )}
