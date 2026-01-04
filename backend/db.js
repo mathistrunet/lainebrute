@@ -1,5 +1,6 @@
 const path = require('path');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 
 const dbFile = path.join(__dirname, 'database.sqlite');
@@ -123,11 +124,28 @@ const seedDatabase = () => {
   const buyerPasswordHash = bcrypt.hashSync('mathtrunet100', 10);
   const producerPasswordHash = bcrypt.hashSync('mathtrunet101', 10);
   const adminPasswordHash = bcrypt.hashSync('mathtrunet102', 10);
-  const insertUser = db.prepare('INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, 1)');
+  const insertVerifiedUser = db.prepare(
+    'INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, 1)'
+  );
+  const insertUnverifiedUser = db.prepare(
+    'INSERT INTO users (email, password_hash, role, email_verified, verification_token, verification_token_expires_at)
+     VALUES (?, ?, ?, 0, ?, ?)'
+  );
 
-  const buyerUserId = insertUser.run('mathtrunet100@gmail.com', buyerPasswordHash, 'buyer').lastInsertRowid;
-  const producerUserId = insertUser.run('mathtrunet101@gmail.com', producerPasswordHash, 'producer').lastInsertRowid;
-  insertUser.run('mathtrunet102@gmail.com', adminPasswordHash, 'admin');
+  const buyerUserId = insertVerifiedUser
+    .run('mathtrunet100@gmail.com', buyerPasswordHash, 'buyer')
+    .lastInsertRowid;
+  const producerUserId = insertVerifiedUser
+    .run('mathtrunet101@gmail.com', producerPasswordHash, 'producer')
+    .lastInsertRowid;
+  insertVerifiedUser.run('mathtrunet102@gmail.com', adminPasswordHash, 'admin');
+  insertUnverifiedUser.run(
+    'mathtrunet103@gmail.com',
+    bcrypt.hashSync('mathtrunet103', 10),
+    'buyer',
+    crypto.randomBytes(24).toString('hex'),
+    new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString()
+  );
 
   const insertProducer = db.prepare(`
     INSERT INTO producers (
