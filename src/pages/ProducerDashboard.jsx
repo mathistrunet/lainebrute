@@ -80,6 +80,42 @@ const emptyProfile = {
   last_name: '',
   phone: '',
   siret: '',
+  lat: null,
+  lng: null,
+};
+
+const geocodeCity = async (city) => {
+  const trimmedCity = city?.trim();
+  if (!trimmedCity) return null;
+  const query = encodeURIComponent(trimmedCity);
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=fr&q=${query}`,
+    {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'fr',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Impossible de récupérer les coordonnées de la ville.');
+  }
+
+  const results = await response.json();
+  if (!Array.isArray(results) || results.length === 0) {
+    return null;
+  }
+
+  const [match] = results;
+  const lat = Number.parseFloat(match.lat);
+  const lng = Number.parseFloat(match.lon);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  return { lat, lng };
 };
 
 function ProducerDashboard() {
@@ -118,7 +154,12 @@ function ProducerDashboard() {
   );
 
   const handleProfileChange = (field, value) => {
-    setProfileForm((previous) => ({ ...previous, [field]: value }));
+    setProfileForm((previous) => {
+      if (field === 'city') {
+        return { ...previous, city: value, lat: null, lng: null };
+      }
+      return { ...previous, [field]: value };
+    });
   };
 
   const handleAdChange = (field, value) => {
@@ -247,6 +288,8 @@ function ProducerDashboard() {
               last_name: data.last_name ?? '',
               phone: data.phone ?? '',
               siret: data.siret ?? '',
+              lat: Number.isFinite(data.lat) ? data.lat : null,
+              lng: Number.isFinite(data.lng) ? data.lng : null,
             }
           : emptyProfile;
         setProfile(normalized);
@@ -296,14 +339,28 @@ function ProducerDashboard() {
     setProfileMessage('');
 
     try {
+      const trimmedCity = profileForm.city?.trim();
+      let coordinates = null;
+
+      if (trimmedCity) {
+        coordinates = await geocodeCity(trimmedCity);
+        if (!coordinates) {
+          setProfileError("Nous n'avons pas reconnu cette ville. Vérifiez l'orthographe.");
+          setProfileStatus('idle');
+          return;
+        }
+      }
+
       const payload = {
         name: profileForm.name?.trim(),
-        city: profileForm.city?.trim() || null,
+        city: trimmedCity || null,
         description: profileForm.description?.trim() || null,
         first_name: profileForm.first_name?.trim() || null,
         last_name: profileForm.last_name?.trim() || null,
         phone: profileForm.phone?.trim() || null,
         siret: profileForm.siret?.trim(),
+        lat: coordinates?.lat ?? profileForm.lat ?? null,
+        lng: coordinates?.lng ?? profileForm.lng ?? null,
       };
       const saved = await api.createProducerProfile(payload);
       const normalized = {
@@ -314,6 +371,8 @@ function ProducerDashboard() {
         last_name: saved?.last_name ?? '',
         phone: saved?.phone ?? '',
         siret: saved?.siret ?? '',
+        lat: Number.isFinite(saved?.lat) ? saved.lat : null,
+        lng: Number.isFinite(saved?.lng) ? saved.lng : null,
       };
       setProfile(normalized);
       setProfileForm(normalized);
