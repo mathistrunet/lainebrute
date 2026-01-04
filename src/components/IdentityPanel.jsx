@@ -93,9 +93,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setMessage('');
     setEmailDelivery(null);
 
-    if (isProducer && (!companyName.trim() || !siret.trim())) {
+    if (isProducer && !companyName.trim()) {
       setStatus('idle');
-      setError("Merci de renseigner le nom de l'entreprise et le SIRET.");
+      setError("Merci de renseigner le nom de l'entreprise.");
       return;
     }
 
@@ -351,8 +351,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
                   type="text"
                   value={siret}
                   onChange={(event) => setSiret(event.target.value)}
-                  required={isProducer}
-                  placeholder="14 chiffres"
+                  placeholder="SIRET"
                 />
               </label>
             </div>

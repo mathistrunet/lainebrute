@@ -56,7 +56,6 @@ const listProducersStmt = db.prepare(`
   ORDER BY name ASC
 `);
 const findProducerByUserIdStmt = db.prepare('SELECT * FROM producers WHERE user_id = ?');
-const findProducerBySiretStmt = db.prepare('SELECT * FROM producers WHERE siret = ?');
 const insertProducerStmt = db.prepare(`
   INSERT INTO producers (
     user_id,
@@ -740,15 +739,8 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
 
     const sanitizedSiret =
       typeof siret === 'string' || typeof siret === 'number' ? String(siret).trim() : '';
-    if (!sanitizedSiret) {
-      return res.status(400).json({ error: 'Le numéro de SIRET est requis.' });
-    }
-
+    const siretValue = sanitizedSiret === '' ? null : sanitizedSiret;
     const existing = findProducerByUserIdStmt.get(req.user.id);
-    const siretOwner = findProducerBySiretStmt.get(sanitizedSiret);
-    if (siretOwner && (!existing || siretOwner.id !== existing.id)) {
-      return res.status(400).json({ error: 'Ce numéro de SIRET est déjà utilisé par un autre compte.' });
-    }
 
     const payload = [
       name,
@@ -759,7 +751,7 @@ app.post('/api/producers', authenticateToken, requireProducer, (req, res) => {
       first_name,
       last_name,
       phone,
-      sanitizedSiret,
+      siretValue,
       toVisibilityFlag(show_identity),
       toVisibilityFlag(show_phone),
       toVisibilityFlag(show_siret),
