@@ -563,8 +563,7 @@ function ProducerDashboard() {
                   type="text"
                   value={profileForm.siret}
                   onChange={(event) => handleProfileChange('siret', event.target.value)}
-                  placeholder="14 chiffres"
-                  required
+                  placeholder="SIRET"
                 />
               </label>
               <label>

@@ -28,16 +28,6 @@ const ensureColumn = (table, column, definition) => {
   db.prepare(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${columnDefinition}`).run();
 };
 
-const normalizeSiretValue = (value) => {
-  if (typeof value === 'string') {
-    return value.replace(/\D/g, '');
-  }
-  if (typeof value === 'number') {
-    return String(value).replace(/\D/g, '');
-  }
-  return '';
-};
-
 db.pragma('foreign_keys = ON');
 
 const createTables = () => {
@@ -107,17 +97,6 @@ const createTables = () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `).run();
-};
-
-const normalizeStoredSirets = () => {
-  const rows = db.prepare('SELECT id, siret FROM producers WHERE siret IS NOT NULL').all();
-  const updateStmt = db.prepare('UPDATE producers SET siret = ? WHERE id = ?');
-  rows.forEach((producer) => {
-    const normalized = normalizeSiretValue(producer.siret);
-    if (normalized && normalized !== producer.siret) {
-      updateStmt.run(normalized, producer.id);
-    }
-  });
 };
 
 const seedDatabase = () => {
@@ -233,7 +212,6 @@ const disableEmailVerification = () => {
 };
 
 createTables();
-normalizeStoredSirets();
 ensureOfferOwners();
 disableEmailVerification();
 seedDatabase();
