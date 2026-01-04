@@ -15,6 +15,8 @@ const formatDate = (value) => {
 function ProducerProfilePage() {
   const { producerId } = useParams();
   const currentUser = api.getCurrentUser();
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserRole = currentUser?.role ?? null;
   const isSelfView = !producerId;
   const [producer, setProducer] = useState(null);
   const [producerAds, setProducerAds] = useState([]);
@@ -74,7 +76,7 @@ function ProducerProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [currentUser, isSelfView, producerId]);
+  }, [currentUserId, currentUserRole, isSelfView, producerId]);
 
   const isOwner = useMemo(
     () =>
