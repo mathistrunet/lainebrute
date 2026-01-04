@@ -19,9 +19,10 @@ const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${POR
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
 const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL;
+const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'mathtrunet100@gmailcom';
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
@@ -171,6 +172,65 @@ const sendVerificationEmail = async (recipient, token) => {
       <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
       <p><a href="${verificationLink}">${verificationLink}</a></p>
     `,
+  };
+
+  await mailTransport.sendMail(message);
+};
+
+const REPORT_CATEGORIES = new Map([
+  ['ad', 'Signalement d’annonce'],
+  ['producer', 'Signalement de producteur'],
+  ['claim', "Revendiquer l'établissement"],
+]);
+
+const formatReportTarget = (target) => {
+  if (!target || typeof target !== 'object') {
+    return 'Cible non précisée';
+  }
+  if (target.type === 'ad') {
+    return `Annonce #${target.id ?? 'N/A'}: ${target.title ?? 'Sans titre'} (${target.producer ?? 'Producteur inconnu'})`;
+  }
+  if (target.type === 'producer') {
+    return `Producteur #${target.id ?? 'N/A'}: ${target.name ?? 'Sans nom'} (${target.city ?? 'Ville inconnue'})`;
+  }
+  return `Cible: ${JSON.stringify(target)}`;
+};
+
+const sendReportEmail = async ({ category, reason, contactEmail, target, documents = [] }) => {
+  if (!process.env.SMTP_HOST) {
+    throw new Error('SMTP non configuré : veuillez renseigner SMTP_HOST');
+  }
+
+  const subject = `${REPORT_CATEGORIES.get(category) ?? 'Signalement'} - Laine Brute`;
+  const formattedTarget = formatReportTarget(target);
+  const attachments = documents
+    .filter((doc) => doc && doc.content)
+    .map((doc) => ({
+      filename: doc.name ?? 'document',
+      content: Buffer.from(doc.content, 'base64'),
+      contentType: doc.type || 'application/octet-stream',
+    }));
+
+  const message = {
+    from: EMAIL_FROM,
+    to: REPORT_EMAIL_TO,
+    subject,
+    text: [
+      `Type: ${REPORT_CATEGORIES.get(category) ?? category}`,
+      `Cible: ${formattedTarget}`,
+      `Email contact: ${contactEmail ?? 'Non renseigné'}`,
+      '',
+      'Motif:',
+      reason,
+    ].join('\n'),
+    html: `
+      <p><strong>Type :</strong> ${REPORT_CATEGORIES.get(category) ?? category}</p>
+      <p><strong>Cible :</strong> ${formattedTarget}</p>
+      <p><strong>Email contact :</strong> ${contactEmail ?? 'Non renseigné'}</p>
+      <p><strong>Motif :</strong></p>
+      <p>${reason}</p>
+    `,
+    attachments,
   };
 
   await mailTransport.sendMail(message);
@@ -396,6 +456,37 @@ app.get('/api/verify-email', (req, res) => {
   } catch (error) {
     console.error('Erreur verify-email', error);
     res.status(500).json({ error: "Impossible de vérifier cet email." });
+  }
+});
+
+app.post('/api/reports', async (req, res) => {
+  try {
+    const { category, reason, contactEmail = null, target = null, documents = [] } = req.body ?? {};
+
+    if (!category || !REPORT_CATEGORIES.has(category)) {
+      return res.status(400).json({ error: 'Type de signalement invalide.' });
+    }
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ error: 'Motif requis.' });
+    }
+
+    const normalizedDocs = Array.isArray(documents) ? documents : [];
+    if (category === 'claim' && normalizedDocs.length === 0) {
+      return res.status(400).json({ error: 'Documents justificatifs requis pour la revendication.' });
+    }
+
+    await sendReportEmail({
+      category,
+      reason: String(reason).trim(),
+      contactEmail: contactEmail ? String(contactEmail).trim() : null,
+      target,
+      documents: normalizedDocs,
+    });
+
+    return res.json({ data: { message: 'Signalement envoyé.' } });
+  } catch (error) {
+    console.error('Erreur report', error);
+    return res.status(500).json({ error: "Impossible d'envoyer le signalement." });
   }
 });
 

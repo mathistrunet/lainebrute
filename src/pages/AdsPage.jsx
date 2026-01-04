@@ -1,10 +1,49 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ReportDialog from '../components/ReportDialog.jsx';
+
+const mockAds = [
+  {
+    id: 1,
+    title: 'Lots de laine blanche',
+    description: 'Disponible en ballots de 40kg, laine brute non lavée.',
+    category: 'Laine (liste extensible)',
+    race: 'Mérinos',
+    availableFrom: '2024-06-01',
+    city: 'Lyon',
+    distanceKm: 18,
+    producer: 'Bergerie des Alpes',
+  },
+  {
+    id: 2,
+    title: 'Laine noire issue de brebis Solognotes',
+    description: 'Parfaite pour filature artisanale, récolte printemps.',
+    category: 'Laine (liste extensible)',
+    race: 'Solognote',
+    availableFrom: '2024-05-15',
+    city: 'Clermont-Ferrand',
+    distanceKm: 72,
+    producer: 'Ferme du Vent',
+  },
+  {
+    id: 3,
+    title: 'Laine lavée pour ateliers',
+    description: 'Race Texel, mise à disposition en sacs de 10kg.',
+    category: 'Laine (liste extensible)',
+    race: 'Texel',
+    availableFrom: '2024-07-10',
+    city: 'Grenoble',
+    distanceKm: 55,
+    producer: 'Atelier des Cimes',
+  },
+];
 import { ads, producers } from '../data/marketData.js';
 
 function AdsPage() {
   const [sortBy, setSortBy] = useState('date');
   const [cityFilter, setCityFilter] = useState('');
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportContext, setReportContext] = useState(null);
 
   const producerById = useMemo(
     () => new Map(producers.map((producer) => [producer.id, producer])),
@@ -27,6 +66,17 @@ function AdsPage() {
       .map((ad) => ({ ...ad, producer: producerById.get(ad.producerId) }))
       .sort(sorter);
   }, [cityFilter, sortBy, producerById]);
+
+  const openReportDialog = (ad) => {
+    setReportContext({
+      type: 'ad',
+      id: ad.id,
+      title: ad.title,
+      producer: ad.producer,
+      city: ad.city,
+    });
+    setIsReportOpen(true);
+  };
 
   return (
     <section>
@@ -68,12 +118,26 @@ function AdsPage() {
               Producteur : {ad.producer?.name ?? 'Producteur'} — {ad.producer?.city ?? ad.city}
               {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
             </p>
+            <div className="card__actions">
+              <Link to="/producteur" className="ghost">
+                Voir la page du producteur
+              </Link>
+              <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
+                Signaler
+              </button>
+            </div>
             <Link to={`/producteurs/${ad.producerId}`} className="ghost">
               Voir la page du producteur
             </Link>
           </li>
         ))}
       </ul>
+      <ReportDialog
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        context={reportContext}
+        defaultCategory="ad"
+      />
     </section>
   );
 }

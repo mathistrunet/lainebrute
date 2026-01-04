@@ -171,4 +171,9 @@ export const api = {
   getAdminUsers: () => request('/admin/users'),
   getAdminOffers: () => request('/admin/offers'),
   getAdminDatabase: () => request('/admin/database'),
+  sendReport: (body) =>
+    request('/reports', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
