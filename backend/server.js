@@ -93,7 +93,8 @@ const updateProducerStmt = db.prepare(`
   WHERE id = ?
 `);
 const listOffersStmt = db.prepare(`
-  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
+  SELECT o.id, o.title, o.availability_date, o.quantity_kg, o.delivery_radius_km, o.sheep_breed,
+         o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
          u.role AS owner_role, u.email AS owner_email,
          p.name AS producer_name, p.city AS producer_city, p.description AS producer_description,
          p.first_name AS producer_first_name, p.last_name AS producer_last_name,
@@ -108,7 +109,8 @@ const listOffersStmt = db.prepare(`
   ORDER BY o.created_at DESC
 `);
 const listOffersByUserStmt = db.prepare(`
-  SELECT o.id, o.title, o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
+  SELECT o.id, o.title, o.availability_date, o.quantity_kg, o.delivery_radius_km, o.sheep_breed,
+         o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
          u.role AS owner_role, u.email AS owner_email,
          p.name AS producer_name, p.city AS producer_city,
          p.first_name AS producer_first_name, p.last_name AS producer_last_name,
@@ -124,9 +126,24 @@ const listOffersByUserStmt = db.prepare(`
   ORDER BY o.created_at DESC
 `);
 const insertOfferStmt = db.prepare(
-  'INSERT INTO offers (producer_id, user_id, title, description, city) VALUES (?, ?, ?, ?, ?)'
+  `INSERT INTO offers (
+    producer_id,
+    user_id,
+    title,
+    availability_date,
+    quantity_kg,
+    delivery_radius_km,
+    sheep_breed,
+    description,
+    city
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
-const updateOfferStmt = db.prepare('UPDATE offers SET title = ?, description = ?, city = ? WHERE id = ?');
+const updateOfferStmt = db.prepare(
+  `UPDATE offers
+   SET title = ?, availability_date = ?, quantity_kg = ?, delivery_radius_km = ?, sheep_breed = ?,
+       description = ?, city = ?
+   WHERE id = ?`
+);
 const selectOfferWithOwnerStmt = db.prepare(`
   SELECT o.*, o.user_id AS owner_user_id, u.email AS owner_email, u.role AS owner_role,
          p.user_id AS producer_user_id, p.name AS producer_name, p.city AS producer_city,
@@ -146,7 +163,8 @@ const adminUsersStmt = db.prepare(
   'SELECT id, email, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
 );
 const adminOffersStmt = db.prepare(`
-  SELECT o.id, o.title, o.description, o.city, o.created_at,
+  SELECT o.id, o.title, o.availability_date, o.quantity_kg, o.delivery_radius_km, o.sheep_breed,
+         o.description, o.city, o.created_at,
          p.id AS producer_id, p.name AS producer_name, p.city AS producer_city,
          u.id AS user_id, u.email AS user_email, u.role AS user_role
   FROM offers o
@@ -369,6 +387,10 @@ const toOfferPayload = (row) => {
   return {
     id: row.id,
     title: row.title,
+    availability_date: row.availability_date ?? null,
+    quantity_kg: row.quantity_kg ?? null,
+    delivery_radius_km: row.delivery_radius_km ?? null,
+    sheep_breed: row.sheep_breed ?? null,
     description: row.description,
     city: row.city,
     created_at: row.created_at,
@@ -832,9 +854,29 @@ app.get('/api/my-offers', authenticateToken, requirePublisher, (req, res) => {
 
 app.post('/api/offers', authenticateToken, requirePublisher, (req, res) => {
   try {
-    const { title, description = null, city = null } = req.body ?? {};
+    const {
+      title,
+      availability_date = null,
+      quantity_kg = null,
+      delivery_radius_km = null,
+      sheep_breed = null,
+      description = null,
+      city = null,
+    } = req.body ?? {};
     if (!title) {
       return res.status(400).json({ error: "Le titre de l'offre est requis." });
+    }
+    if (!availability_date) {
+      return res.status(400).json({ error: "La date de disponibilité est requise." });
+    }
+    if (quantity_kg === null || quantity_kg === undefined || quantity_kg === '') {
+      return res.status(400).json({ error: 'La quantité est requise.' });
+    }
+    if (delivery_radius_km === null || delivery_radius_km === undefined || delivery_radius_km === '') {
+      return res.status(400).json({ error: 'La zone de livraison est requise.' });
+    }
+    if (!sheep_breed) {
+      return res.status(400).json({ error: 'La race de mouton est requise.' });
     }
 
     let producerId = null;
@@ -848,7 +890,17 @@ app.post('/api/offers', authenticateToken, requirePublisher, (req, res) => {
       producerId = producer.id;
     }
 
-    const result = insertOfferStmt.run(producerId, req.user.id, title, description, city);
+    const result = insertOfferStmt.run(
+      producerId,
+      req.user.id,
+      title,
+      availability_date,
+      quantity_kg,
+      delivery_radius_km,
+      sheep_breed,
+      description,
+      city
+    );
     const created = selectOfferWithOwnerStmt.get(result.lastInsertRowid);
     res.status(201).json({ data: toOfferPayload(created) });
   } catch (error) {
@@ -860,10 +912,30 @@ app.post('/api/offers', authenticateToken, requirePublisher, (req, res) => {
 app.put('/api/offers/:id', authenticateToken, requirePublisher, (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description = null, city = null } = req.body ?? {};
+    const {
+      title,
+      availability_date = null,
+      quantity_kg = null,
+      delivery_radius_km = null,
+      sheep_breed = null,
+      description = null,
+      city = null,
+    } = req.body ?? {};
 
     if (!title) {
       return res.status(400).json({ error: "Le titre de l'offre est requis." });
+    }
+    if (!availability_date) {
+      return res.status(400).json({ error: "La date de disponibilité est requise." });
+    }
+    if (quantity_kg === null || quantity_kg === undefined || quantity_kg === '') {
+      return res.status(400).json({ error: 'La quantité est requise.' });
+    }
+    if (delivery_radius_km === null || delivery_radius_km === undefined || delivery_radius_km === '') {
+      return res.status(400).json({ error: 'La zone de livraison est requise.' });
+    }
+    if (!sheep_breed) {
+      return res.status(400).json({ error: 'La race de mouton est requise.' });
     }
 
     const offer = selectOfferWithOwnerStmt.get(id);
@@ -875,7 +947,16 @@ app.put('/api/offers/:id', authenticateToken, requirePublisher, (req, res) => {
       return res.status(403).json({ error: 'Vous ne pouvez pas modifier cette offre.' });
     }
 
-    updateOfferStmt.run(title, description, city, id);
+    updateOfferStmt.run(
+      title,
+      availability_date,
+      quantity_kg,
+      delivery_radius_km,
+      sheep_breed,
+      description,
+      city,
+      id
+    );
     const updatedOffer = selectOfferWithOwnerStmt.get(id);
     res.json({ data: toOfferPayload(updatedOffer) });
   } catch (error) {

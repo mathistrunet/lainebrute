@@ -2,6 +2,76 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 
+const deliveryZoneOptions = [0, 5, 10, 15, 20, 30, 50, 80, 100];
+const sheepBreeds = [
+  'Ardes',
+  'Aure et Campan',
+  'Avranchin',
+  'Barégeoise',
+  'Basco-béarnaise',
+  'Belle-Île',
+  "Berrichon de l'Indre",
+  'Berrichon du Cher',
+  'Bizet',
+  'Blanche du Massif central',
+  'Bleu du Maine',
+  'Boulonnaise',
+  'Brigasque',
+  'Castillonaise',
+  'Caussenarde des Garrigues',
+  'Causse du Lot',
+  'Charmoise',
+  'Clun Forest',
+  'Corse',
+  'Cotentin',
+  'Dorset Down',
+  'Est à laine Mérinos',
+  'Finnoise',
+  'Grivette',
+  'Hampshire',
+  'Île-de-France',
+  'Romane',
+  'Lacaune',
+  'Lacaune lait',
+  'Lacaune viande',
+  'Landaise',
+  'Landes de Bretagne',
+  'Limousine',
+  'Lourdaise',
+  'Manech tête noire',
+  'Manech tête rousse',
+  'Martinik',
+  'Mérinos',
+  "Mérinos d'Arles",
+  'Mérinos de Rambouillet',
+  'Mérinos Précoce',
+  'Montagne noire',
+  'Mourerous',
+  'Mouton Charollais',
+  'Mouton marron des Aravis',
+  "Mouton d'Ouessant",
+  'Mouton Vendéen',
+  'Noire du Velay',
+  'Peï',
+  'Préalpes du Sud',
+  'Raïole',
+  'Rava',
+  'Romanov',
+  "Rouge de l'Ouest",
+  'Rouge du Roussillon',
+  'Roussin de la Hague',
+  'Sasi ardia',
+  'Shropshire',
+  'Scottish Blackface',
+  'Solognote',
+  'Southdown',
+  'Suffolk',
+  'Texel',
+  'Tarasconnaise',
+  'Thônes et Marthod',
+  'Autres',
+];
+
 const emptyProfile = {
   name: '',
   city: '',
@@ -34,6 +104,10 @@ function ProducerDashboard() {
   const [producersError, setProducersError] = useState('');
   const [adForm, setAdForm] = useState({
     title: '',
+    availability_date: '',
+    quantity_kg: '',
+    delivery_radius_km: '',
+    sheep_breed: '',
     description: '',
     city: '',
   });
@@ -52,7 +126,15 @@ function ProducerDashboard() {
   };
 
   const resetAdForm = () => {
-    setAdForm({ title: '', description: '', city: '' });
+    setAdForm({
+      title: '',
+      availability_date: '',
+      quantity_kg: '',
+      delivery_radius_km: '',
+      sheep_breed: '',
+      description: '',
+      city: '',
+    });
     setEditingAdId(null);
   };
 
@@ -62,13 +144,18 @@ function ProducerDashboard() {
     setAdsError('');
 
     try {
+      const payload = {
+        ...adForm,
+        quantity_kg: adForm.quantity_kg === '' ? null : Number(adForm.quantity_kg),
+        delivery_radius_km: adForm.delivery_radius_km === '' ? null : Number(adForm.delivery_radius_km),
+      };
       if (editingAdId) {
-        const updated = await api.updateOffer(editingAdId, adForm);
+        const updated = await api.updateOffer(editingAdId, payload);
         setAds((previous) =>
           previous.map((ad) => (ad.id === editingAdId ? updated : ad))
         );
       } else {
-        const created = await api.createOffer(adForm);
+        const created = await api.createOffer(payload);
         setAds((previous) => [created, ...previous]);
       }
 
@@ -85,6 +172,10 @@ function ProducerDashboard() {
     setEditingAdId(ad.id);
     setAdForm({
       title: ad.title,
+      availability_date: ad.availability_date ?? '',
+      quantity_kg: ad.quantity_kg ?? '',
+      delivery_radius_km: ad.delivery_radius_km ?? '',
+      sheep_breed: ad.sheep_breed ?? '',
       description: ad.description ?? '',
       city: ad.city ?? '',
     });
@@ -520,15 +611,59 @@ function ProducerDashboard() {
               />
             </label>
             <label>
-              Ville
+              Date de disponibilité
               <input
-                type="text"
-                value={adForm.city}
-                onChange={(event) => handleAdChange('city', event.target.value)}
-                placeholder="Ville"
+                type="date"
+                value={adForm.availability_date}
+                onChange={(event) => handleAdChange('availability_date', event.target.value)}
+                required
               />
             </label>
           </div>
+          <div className="form-grid-2">
+            <label>
+              Quantité (kg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={adForm.quantity_kg}
+                onChange={(event) => handleAdChange('quantity_kg', event.target.value)}
+                placeholder="Ex: 120"
+                required
+              />
+            </label>
+            <label>
+              Zone de livraison autour de la ferme
+              <select
+                value={adForm.delivery_radius_km}
+                onChange={(event) => handleAdChange('delivery_radius_km', event.target.value)}
+                required
+              >
+                <option value="">Sélectionnez un rayon</option>
+                {deliveryZoneOptions.map((distance) => (
+                  <option key={distance} value={distance}>
+                    {distance} km
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
+            Race de mouton
+            <select
+              value={adForm.sheep_breed}
+              onChange={(event) => handleAdChange('sheep_breed', event.target.value)}
+              required
+            >
+              <option value="">Sélectionnez une race</option>
+              {sheepBreeds.map((breed) => (
+                <option key={breed} value={breed}>
+                  {breed}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             Description
             <textarea
@@ -566,7 +701,20 @@ function ProducerDashboard() {
                   <div className="eyebrow">Annonce producteur</div>
                   <h4>{ad.title}</h4>
                   <p>{ad.description || 'Pas de description.'}</p>
-                  <p>Ville : {ad.city ?? 'Non renseignée'}</p>
+                  <p>Disponibilité : {ad.availability_date || 'Non renseignée'}</p>
+                  <p>
+                    Quantité :{' '}
+                    {ad.quantity_kg !== null && ad.quantity_kg !== undefined
+                      ? `${ad.quantity_kg} kg`
+                      : 'Non renseignée'}
+                  </p>
+                  <p>
+                    Zone de livraison :{' '}
+                    {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
+                      ? `${ad.delivery_radius_km} km`
+                      : 'Non renseignée'}
+                  </p>
+                  <p>Race : {ad.sheep_breed || 'Non renseignée'}</p>
                 </div>
                 <div className="card__actions">
                   <button type="button" className="ghost" onClick={() => startEditAd(ad)}>
