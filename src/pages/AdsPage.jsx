@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ReportDialog from '../components/ReportDialog.jsx';
 
 const mockAds = [
   {
@@ -40,6 +41,8 @@ const mockAds = [
 function AdsPage() {
   const [sortBy, setSortBy] = useState('date');
   const [cityFilter, setCityFilter] = useState('');
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportContext, setReportContext] = useState(null);
 
   const availableCities = useMemo(
     () => ['', ...new Set(mockAds.map((ad) => ad.city))],
@@ -55,6 +58,17 @@ function AdsPage() {
 
     return [...filtered].sort(sorter);
   }, [cityFilter, sortBy]);
+
+  const openReportDialog = (ad) => {
+    setReportContext({
+      type: 'ad',
+      id: ad.id,
+      title: ad.title,
+      producer: ad.producer,
+      city: ad.city,
+    });
+    setIsReportOpen(true);
+  };
 
   return (
     <section>
@@ -95,12 +109,23 @@ function AdsPage() {
             <p>
               Producteur : {ad.producer} — {ad.city} ({ad.distanceKm} km)
             </p>
-            <Link to="/producteur" className="ghost">
-              Voir la page du producteur
-            </Link>
+            <div className="card__actions">
+              <Link to="/producteur" className="ghost">
+                Voir la page du producteur
+              </Link>
+              <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
+                Signaler
+              </button>
+            </div>
           </li>
         ))}
       </ul>
+      <ReportDialog
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        context={reportContext}
+        defaultCategory="ad"
+      />
     </section>
   );
 }
