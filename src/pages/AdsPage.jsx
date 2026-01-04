@@ -112,6 +112,20 @@ function AdsPage() {
               <div className="eyebrow">Annonce producteur</div>
               <h2>{ad.title}</h2>
               <p>{ad.description || 'Pas de description fournie.'}</p>
+              <p>Disponibilité : {formatDate(ad.availability_date)}</p>
+              <p>
+                Quantité :{' '}
+                {ad.quantity_kg !== null && ad.quantity_kg !== undefined
+                  ? `${ad.quantity_kg} kg`
+                  : 'Non renseignée'}
+              </p>
+              <p>
+                Zone de livraison :{' '}
+                {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
+                  ? `${ad.delivery_radius_km} km`
+                  : 'Non renseignée'}
+              </p>
+              <p>Race : {ad.sheep_breed || 'Non renseignée'}</p>
               <p>Publié le : {formatDate(ad.created_at)}</p>
               <p>
                 Producteur : {ad.producer?.name ?? 'Producteur'} — {ad.producer?.city ?? ad.city ?? 'Ville inconnue'}

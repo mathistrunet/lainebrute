@@ -96,6 +96,10 @@ const createTables = () => {
       producer_id INTEGER,
       user_id INTEGER,
       title TEXT NOT NULL,
+      availability_date TEXT,
+      quantity_kg REAL,
+      delivery_radius_km INTEGER,
+      sheep_breed TEXT,
       description TEXT,
       city TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -172,12 +176,26 @@ const seedDatabase = () => {
   ).lastInsertRowid;
 
   const insertOffer = db.prepare(
-    'INSERT INTO offers (producer_id, user_id, title, description, city) VALUES (?, ?, ?, ?, ?)'
+    `INSERT INTO offers (
+      producer_id,
+      user_id,
+      title,
+      availability_date,
+      quantity_kg,
+      delivery_radius_km,
+      sheep_breed,
+      description,
+      city
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   insertOffer.run(
     fermeNordId,
     producerUserId,
     'Tomates bio en cagettes',
+    '2024-09-01',
+    100,
+    30,
+    'Lacaune',
     'Cagettes de 10 kg de tomates plein champ disponibles chaque semaine.',
     'Lille'
   );
@@ -185,6 +203,10 @@ const seedDatabase = () => {
     null,
     buyerUserId,
     'Recherche lots de laine brute',
+    '2024-10-15',
+    250,
+    50,
+    'Texel',
     'Acheteur intéressé par des lots réguliers pour transformation.',
     'Grenoble'
   );
@@ -192,6 +214,10 @@ const seedDatabase = () => {
 
 const ensureOfferOwners = () => {
   ensureColumn('offers', 'user_id', 'INTEGER');
+  ensureColumn('offers', 'availability_date', 'TEXT');
+  ensureColumn('offers', 'quantity_kg', 'REAL');
+  ensureColumn('offers', 'delivery_radius_km', 'INTEGER');
+  ensureColumn('offers', 'sheep_breed', 'TEXT');
 
   const fillOwnerStmt = db.prepare(
     `UPDATE offers SET user_id = (SELECT user_id FROM producers WHERE producers.id = offers.producer_id)
