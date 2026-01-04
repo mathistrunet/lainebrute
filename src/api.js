@@ -151,6 +151,15 @@ export const api = {
       body: JSON.stringify({ email }),
     });
   },
+  resendVerificationEmail: async (email) => {
+    if (!email) {
+      throw new Error('Adresse email requise.');
+    }
+    return request('/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
   resetPassword: (token, password) => {
     if (!token) {
       return Promise.reject(new Error('Lien de réinitialisation invalide.'));

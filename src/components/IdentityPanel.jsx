@@ -162,6 +162,28 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
   };
 
+  const handleResendVerification = async () => {
+    setStatus('loading');
+    setError('');
+    setMessage('');
+    setEmailDelivery(null);
+    try {
+      const result = await api.resendVerificationEmail(email.trim());
+      const delivery = result?.emailDelivery ?? null;
+      setEmailDelivery(delivery);
+      if (delivery?.sent) {
+        setMessage(`Email d'activation renvoyé à ${delivery.to}.`);
+      } else {
+        setError(delivery?.error || "Impossible d'envoyer l'email d'activation.");
+      }
+    } catch (resendError) {
+      setEmailDelivery(resendError.details?.emailDelivery ?? null);
+      setError(resendError.message || "Impossible d'envoyer l'email d'activation.");
+    } finally {
+      setStatus('idle');
+    }
+  };
+
   const tabs = useMemo(
     () => [
       { value: 'login', label: 'Connexion' },
@@ -265,6 +287,14 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
               Mot de passe oublié ?
             </button>
           </div>
+          <button
+            type="button"
+            className="ghost"
+            onClick={handleResendVerification}
+            disabled={status === 'loading' || !email.trim()}
+          >
+            Renvoyer l&apos;email d&apos;activation
+          </button>
           {error && <p className="error">{error}</p>}
           {emailDeliveryMessage && (
             <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
