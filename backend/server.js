@@ -17,8 +17,8 @@ const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
-const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL;
+const EMAIL_FROM = process.env.EMAIL_FROM;
+const APP_URL = process.env.APP_URL || FRONTEND_ORIGIN;
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json());
@@ -140,36 +140,61 @@ const listTablesStmt = db.prepare(
 
 const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 
-const mailTransport = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
-  auth: process.env.SMTP_USER
-    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-    : undefined,
-});
-
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
-const buildVerificationLink = (token) => {
-  const baseUrl = EMAIL_VERIFICATION_URL || `${FRONTEND_ORIGIN}/verify-email`;
-  return `${baseUrl}?token=${encodeURIComponent(token)}`;
-};
+const buildVerificationLink = (token) => `${APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
 
-const sendVerificationEmail = async (recipient, token) => {
-  if (!process.env.SMTP_HOST) {
-    throw new Error('SMTP non configuré : veuillez renseigner SMTP_HOST');
+// Centralise la lecture de la configuration SMTP depuis les variables d'environnement.
+const getSmtpConfig = () => ({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASS,
+});
+
+// Validation explicite pour éviter un envoi en production avec une config incomplète.
+const validateSmtpConfig = () => {
+  const { host, port, user, pass } = getSmtpConfig();
+  const missingKeys = [];
+
+  if (!host) missingKeys.push('SMTP_HOST');
+  if (!port) missingKeys.push('SMTP_PORT');
+  if (!user) missingKeys.push('SMTP_USER');
+  if (!pass) missingKeys.push('SMTP_PASS');
+  if (!EMAIL_FROM) missingKeys.push('EMAIL_FROM');
+
+  if (missingKeys.length > 0) {
+    throw new Error(`SMTP non configuré : renseignez ${missingKeys.join(', ')}`);
   }
 
-  const verificationLink = buildVerificationLink(token);
+  return { host, port, user, pass };
+};
+
+const sendVerificationEmail = async (recipient, verificationUrl) => {
+  // En dehors de la production, on n'envoie pas d'email : on log uniquement le lien.
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Lien de vérification pour ${recipient} : ${verificationUrl}`);
+    return;
+  }
+
+  // En production, on exige une configuration SMTP complète.
+  const smtpConfig = validateSmtpConfig();
+
+  const mailTransport = nodemailer.createTransport({
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.port === 465,
+    auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+  });
+
   const message = {
     from: EMAIL_FROM,
     to: recipient,
     subject: 'Vérifiez votre adresse email',
-    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationLink}`,
+    text: `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationUrl}`,
     html: `
       <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
-      <p><a href="${verificationLink}">${verificationLink}</a></p>
+      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
     `,
   };
 
@@ -334,8 +359,10 @@ app.post('/api/register', async (req, res) => {
 
     updateUserVerificationStmt.run(verificationToken, expiresAt, result.lastInsertRowid);
 
+    const verificationUrl = buildVerificationLink(verificationToken);
+
     try {
-      await sendVerificationEmail(email, verificationToken);
+      await sendVerificationEmail(email, verificationUrl);
     } catch (sendError) {
       console.error('Erreur envoi email de vérification', sendError);
       deleteUserByIdStmt.run(result.lastInsertRowid);
