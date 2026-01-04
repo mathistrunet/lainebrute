@@ -151,6 +151,18 @@ export const api = {
       body: JSON.stringify({ email }),
     });
   },
+  resetPassword: (token, password) => {
+    if (!token) {
+      return Promise.reject(new Error('Lien de réinitialisation invalide.'));
+    }
+    if (!password) {
+      return Promise.reject(new Error('Nouveau mot de passe requis.'));
+    }
+    return request('/password-reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
   logout: () => storeToken(null),
   getProducers: () => request('/producers'),
   createProducerProfile: (body) =>
