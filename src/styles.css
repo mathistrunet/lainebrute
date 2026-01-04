@@ -897,3 +897,73 @@ a.ghost {
   color: #1b4332;
   font-weight: 700;
 }
+
+.admin-table__wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid #d8f3dc;
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  color: #1b4332;
+  font-weight: 700;
+  background: #f0f6f2;
+}
+
+.admin-table input,
+.admin-table select {
+  width: 100%;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.admin-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-metric {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+  color: #1b4332;
+}
+
+.admin-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}

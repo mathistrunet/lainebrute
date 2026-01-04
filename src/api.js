@@ -184,8 +184,15 @@ export const api = {
     }),
   deleteOffer: (offerId) => request(`/offers/${offerId}`, { method: 'DELETE' }),
   getAdminUsers: () => request('/admin/users'),
+  updateAdminUser: (userId, body) =>
+    request(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminUser: (userId) => request(`/admin/users/${userId}`, { method: 'DELETE' }),
   getAdminOffers: () => request('/admin/offers'),
   getAdminDatabase: () => request('/admin/database'),
+  getAdminTraffic: () => request('/admin/traffic'),
   sendReport: (body) =>
     request('/reports', {
       method: 'POST',
