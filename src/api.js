@@ -144,7 +144,6 @@ export const api = {
     }),
   saveProfile: (email, profile) => saveProfile(email, profile),
   getProfile,
-  verifySiret: (siret) => request(`/siret/${encodeURIComponent(siret ?? '')}`),
   requestPasswordReset: async (email) => {
     if (!email) {
       throw new Error('Adresse email requise.');
