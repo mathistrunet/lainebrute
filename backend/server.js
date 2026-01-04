@@ -33,6 +33,7 @@ app.use('/api', (req, res, next) => {
 });
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
+const findUserByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
 const updateUserResetTokenStmt = db.prepare(
   'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?'
@@ -45,6 +46,9 @@ const updateUserPasswordStmt = db.prepare(
   'UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_token_expires_at = NULL WHERE id = ?'
 );
 const deleteUserByIdStmt = db.prepare('DELETE FROM users WHERE id = ?');
+const updateUserAdminStmt = db.prepare(
+  'UPDATE users SET email = ?, role = ?, is_blocked = ? WHERE id = ?'
+);
 const listProducersStmt = db.prepare(`
   SELECT id, name, city, description, lat, lng, created_at,
          first_name, last_name, phone, siret,
@@ -138,7 +142,9 @@ const selectOfferWithOwnerStmt = db.prepare(`
   WHERE o.id = ?
 `);
 const deleteOfferStmt = db.prepare('DELETE FROM offers WHERE id = ?');
-const adminUsersStmt = db.prepare('SELECT id, email, role, created_at FROM users ORDER BY created_at DESC');
+const adminUsersStmt = db.prepare(
+  'SELECT id, email, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
+);
 const adminOffersStmt = db.prepare(`
   SELECT o.id, o.title, o.description, o.city, o.created_at,
          p.id AS producer_id, p.name AS producer_name, p.city AS producer_city,
@@ -151,6 +157,23 @@ const adminOffersStmt = db.prepare(`
 const listTablesStmt = db.prepare(
   "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
 );
+const countUsersStmt = db.prepare('SELECT COUNT(*) AS count FROM users');
+const countProducersStmt = db.prepare('SELECT COUNT(*) AS count FROM producers');
+const countOffersStmt = db.prepare('SELECT COUNT(*) AS count FROM offers');
+const usersByDayStmt = db.prepare(`
+  SELECT date(created_at) AS day, COUNT(*) AS count
+  FROM users
+  WHERE datetime(created_at) >= datetime('now', ?)
+  GROUP BY date(created_at)
+  ORDER BY date(created_at) ASC
+`);
+const offersByDayStmt = db.prepare(`
+  SELECT date(created_at) AS day, COUNT(*) AS count
+  FROM offers
+  WHERE datetime(created_at) >= datetime('now', ?)
+  GROUP BY date(created_at)
+  ORDER BY date(created_at) ASC
+`);
 
 const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 
@@ -411,7 +434,14 @@ const authenticateToken = (req, res, next) => {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
+    const dbUser = findUserByIdStmt.get(payload.id);
+    if (!dbUser) {
+      return res.status(401).json({ error: 'Utilisateur introuvable.' });
+    }
+    if (dbUser.is_blocked) {
+      return res.status(403).json({ error: 'Compte interdit.' });
+    }
+    req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
     return next();
   } catch (error) {
     return res.status(401).json({ error: 'Token invalide.' });
@@ -665,6 +695,10 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Identifiants incorrects.' });
     }
 
+    if (user.is_blocked) {
+      return res.status(403).json({ error: 'Compte interdit.' });
+    }
+
     if (!user.email_verified) {
       verifyUserStmt.run(user.id);
     }
@@ -880,6 +914,83 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = Number(id);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Identifiant utilisateur invalide.' });
+    }
+
+    const existing = findUserByIdStmt.get(userId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    }
+
+    const { email = existing.email, role = existing.role, is_blocked = existing.is_blocked } = req.body ?? {};
+
+    if (!['producer', 'admin', 'buyer'].includes(role)) {
+      return res.status(400).json({ error: 'Rôle invalide.' });
+    }
+
+    if (String(email).trim() === '') {
+      return res.status(400).json({ error: 'Email requis.' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const emailOwner = findUserByEmailStmt.get(normalizedEmail);
+    if (emailOwner && emailOwner.id !== userId) {
+      return res.status(400).json({ error: 'Email déjà utilisé.' });
+    }
+
+    const blockedFlag = Number(is_blocked) ? 1 : 0;
+
+    if (req.user.id === userId && blockedFlag) {
+      return res.status(400).json({ error: 'Vous ne pouvez pas vous interdire vous-même.' });
+    }
+    if (req.user.id === userId && role !== 'admin') {
+      return res.status(400).json({ error: 'Vous ne pouvez pas retirer votre rôle administrateur.' });
+    }
+
+    updateUserAdminStmt.run(normalizedEmail, role, blockedFlag, userId);
+    const updated = findUserByIdStmt.get(userId);
+    res.json({
+      data: {
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        is_blocked: updated.is_blocked,
+        created_at: updated.created_at,
+      },
+    });
+  } catch (error) {
+    console.error('Erreur admin update user', error);
+    res.status(500).json({ error: "Impossible de mettre à jour l'utilisateur." });
+  }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = Number(id);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Identifiant utilisateur invalide.' });
+    }
+    if (req.user.id === userId) {
+      return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte.' });
+    }
+    const existing = findUserByIdStmt.get(userId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    }
+    deleteUserByIdStmt.run(userId);
+    res.json({ data: { success: true } });
+  } catch (error) {
+    console.error('Erreur admin delete user', error);
+    res.status(500).json({ error: "Impossible de supprimer l'utilisateur." });
+  }
+});
+
 app.get('/api/admin/offers', authenticateToken, requireAdmin, (req, res) => {
   try {
     const offers = adminOffersStmt.all().map((row) => ({
@@ -911,6 +1022,23 @@ app.get('/api/admin/database', authenticateToken, requireAdmin, (req, res) => {
   } catch (error) {
     console.error('Erreur admin database', error);
     res.status(500).json({ error: 'Impossible de récupérer la base de données.' });
+  }
+});
+
+app.get('/api/admin/traffic', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const range = '-14 days';
+    const totals = {
+      users: countUsersStmt.get().count,
+      producers: countProducersStmt.get().count,
+      offers: countOffersStmt.get().count,
+    };
+    const usersByDay = usersByDayStmt.all(range);
+    const offersByDay = offersByDayStmt.all(range);
+    res.json({ data: { totals, usersByDay, offersByDay, range } });
+  } catch (error) {
+    console.error('Erreur admin traffic', error);
+    res.status(500).json({ error: 'Impossible de récupérer la fréquentation.' });
   }
 });
 

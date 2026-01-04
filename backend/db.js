@@ -47,6 +47,7 @@ const createTables = () => {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('producer', 'admin', 'buyer')),
+      is_blocked INTEGER NOT NULL DEFAULT 0,
       email_verified INTEGER NOT NULL DEFAULT 0,
       verification_token TEXT,
       verification_token_expires_at TEXT,
@@ -87,6 +88,7 @@ const createTables = () => {
   ensureColumn('users', 'verification_token_expires_at', 'TEXT');
   ensureColumn('users', 'password_reset_token', 'TEXT');
   ensureColumn('users', 'password_reset_token_expires_at', 'TEXT');
+  ensureColumn('users', 'is_blocked', 'INTEGER NOT NULL DEFAULT 0');
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS offers (
