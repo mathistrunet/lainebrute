@@ -90,6 +90,8 @@ const updateProducerStmt = db.prepare(`
       show_siret = ?
   WHERE id = ?
 `);
+const findProducerByIdStmt = db.prepare('SELECT * FROM producers WHERE id = ?');
+const deleteProducerByIdStmt = db.prepare('DELETE FROM producers WHERE id = ?');
 const listOffersStmt = db.prepare(`
   SELECT o.id, o.title, o.availability_date, o.quantity_kg, o.delivery_radius_km, o.sheep_breed,
          o.description, o.city, o.created_at, o.producer_id, o.user_id AS owner_user_id,
@@ -160,6 +162,24 @@ const deleteOfferStmt = db.prepare('DELETE FROM offers WHERE id = ?');
 const adminUsersStmt = db.prepare(
   'SELECT id, email, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
 );
+const adminProducersStmt = db.prepare(`
+  SELECT p.id, p.user_id, p.name, p.city, p.description, p.lat, p.lng,
+         p.first_name, p.last_name, p.phone, p.siret,
+         p.show_identity, p.show_phone, p.show_siret, p.created_at,
+         u.email AS user_email
+  FROM producers p
+  JOIN users u ON u.id = p.user_id
+  ORDER BY p.created_at DESC
+`);
+const adminProducerByIdStmt = db.prepare(`
+  SELECT p.id, p.user_id, p.name, p.city, p.description, p.lat, p.lng,
+         p.first_name, p.last_name, p.phone, p.siret,
+         p.show_identity, p.show_phone, p.show_siret, p.created_at,
+         u.email AS user_email
+  FROM producers p
+  JOIN users u ON u.id = p.user_id
+  WHERE p.id = ?
+`);
 const adminOffersStmt = db.prepare(`
   SELECT o.id, o.title, o.availability_date, o.quantity_kg, o.delivery_radius_km, o.sheep_breed,
          o.description, o.city, o.created_at,
@@ -1012,11 +1032,105 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
   }
 });
 
+app.get('/api/admin/producers', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const producers = adminProducersStmt.all();
+    res.json({ data: producers });
+  } catch (error) {
+    console.error('Erreur admin producers', error);
+    res.status(500).json({ error: 'Impossible de récupérer les producteurs.' });
+  }
+});
+
+app.put('/api/admin/producers/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const producerId = Number(id);
+    if (!Number.isInteger(producerId)) {
+      return res.status(400).json({ error: 'Identifiant producteur invalide.' });
+    }
+
+    const existing = findProducerByIdStmt.get(producerId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Producteur introuvable.' });
+    }
+
+    const {
+      name = existing.name,
+      city = existing.city,
+      description = existing.description,
+      lat = existing.lat,
+      lng = existing.lng,
+      first_name = existing.first_name,
+      last_name = existing.last_name,
+      phone = existing.phone,
+      siret = existing.siret,
+      show_identity = existing.show_identity,
+      show_phone = existing.show_phone,
+      show_siret = existing.show_siret,
+    } = req.body ?? {};
+
+    if (!name || String(name).trim() === '') {
+      return res.status(400).json({ error: "Le nom de l'exploitation est requis." });
+    }
+
+    const sanitizedSiret =
+      typeof siret === 'string' || typeof siret === 'number' ? String(siret).trim() : '';
+    const siretValue = sanitizedSiret === '' ? null : sanitizedSiret;
+
+    updateProducerStmt.run(
+      String(name).trim(),
+      city ? String(city).trim() : null,
+      description ? String(description).trim() : null,
+      sanitizeCoordinate(lat),
+      sanitizeCoordinate(lng),
+      first_name ? String(first_name).trim() : null,
+      last_name ? String(last_name).trim() : null,
+      phone ? String(phone).trim() : null,
+      siretValue,
+      toVisibilityFlag(show_identity, existing.show_identity),
+      toVisibilityFlag(show_phone, existing.show_phone),
+      toVisibilityFlag(show_siret, existing.show_siret),
+      producerId
+    );
+    const updated = adminProducerByIdStmt.get(producerId);
+    res.json({ data: updated });
+  } catch (error) {
+    console.error('Erreur admin update producer', error);
+    res.status(500).json({ error: 'Impossible de mettre à jour le producteur.' });
+  }
+});
+
+app.delete('/api/admin/producers/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const producerId = Number(id);
+    if (!Number.isInteger(producerId)) {
+      return res.status(400).json({ error: 'Identifiant producteur invalide.' });
+    }
+
+    const existing = findProducerByIdStmt.get(producerId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Producteur introuvable.' });
+    }
+
+    deleteProducerByIdStmt.run(producerId);
+    res.json({ data: { success: true } });
+  } catch (error) {
+    console.error('Erreur admin delete producer', error);
+    res.status(500).json({ error: 'Impossible de supprimer le producteur.' });
+  }
+});
+
 app.get('/api/admin/offers', authenticateToken, requireAdmin, (req, res) => {
   try {
     const offers = adminOffersStmt.all().map((row) => ({
       id: row.id,
       title: row.title,
+      availability_date: row.availability_date,
+      quantity_kg: row.quantity_kg,
+      delivery_radius_km: row.delivery_radius_km,
+      sheep_breed: row.sheep_breed,
       description: row.description,
       city: row.city,
       created_at: row.created_at,
