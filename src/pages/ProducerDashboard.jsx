@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../api.js';
 
 const defaultProfile = {
   contactEmail: 'contact@bergerie-des-alpes.fr',
@@ -32,9 +34,14 @@ const initialAds = [
 ];
 
 function ProducerDashboard() {
+  const currentUser = api.getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
   const [profile, setProfile] = useState(defaultProfile);
   const [ads, setAds] = useState(initialAds);
   const [editingAdId, setEditingAdId] = useState(null);
+  const [producers, setProducers] = useState([]);
+  const [producersStatus, setProducersStatus] = useState('idle');
+  const [producersError, setProducersError] = useState('');
   const [adForm, setAdForm] = useState({
     title: '',
     category: categoryOptions[0],
@@ -82,6 +89,90 @@ function ProducerDashboard() {
       status: ad.status,
     });
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProducers = async () => {
+      setProducersStatus('loading');
+      setProducersError('');
+      try {
+        const result = await api.getProducers();
+        if (!isMounted) return;
+        setProducers(Array.isArray(result) ? result : []);
+      } catch (error) {
+        console.error(error);
+        if (!isMounted) return;
+        setProducersError("Impossible de récupérer la liste des producteurs.");
+      } finally {
+        if (isMounted) {
+          setProducersStatus('idle');
+        }
+      }
+    };
+
+    if (isAdmin) {
+      loadProducers();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin]);
+
+  if (isAdmin) {
+    return (
+      <section className="producer-dashboard">
+        <h1>Espace producteur</h1>
+        <p>Accédez aux espaces producteurs pour suivre leurs informations et leurs annonces.</p>
+
+        <section className="card">
+          <div className="section-header">
+            <div>
+              <h2>Liste des producteurs</h2>
+              <p className="muted">
+                Cliquez sur un producteur pour ouvrir son espace et consulter ses annonces.
+              </p>
+            </div>
+          </div>
+
+          {producersStatus === 'loading' && (
+            <p className="muted">Chargement des producteurs...</p>
+          )}
+          {producersError && <p className="error">{producersError}</p>}
+
+          {!producersError && producersStatus !== 'loading' && (
+            <>
+              {producers.length === 0 ? (
+                <p className="muted">Aucun producteur disponible pour le moment.</p>
+              ) : (
+                <ul className="card-list">
+                  {producers.map((producer) => (
+                    <li key={producer.id} className="card">
+                      <div className="card__content">
+                        <div className="eyebrow">Producteur</div>
+                        <h3>{producer.name}</h3>
+                        <p>{producer.city ?? 'Ville non renseignée'}</p>
+                        <p>
+                          Contact :{' '}
+                          {producer.email || producer.phone
+                            ? [producer.email, producer.phone].filter(Boolean).join(' · ')
+                            : 'Non renseigné'}
+                        </p>
+                      </div>
+                      <Link to={`/producteurs/${producer.id}`} className="ghost">
+                        Voir l&apos;espace producteur
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </section>
+      </section>
+    );
+  }
 
   return (
     <section className="producer-dashboard">
