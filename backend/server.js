@@ -18,7 +18,6 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
-const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL || FRONTEND_ORIGIN;
 const PASSWORD_RESET_URL = process.env.PASSWORD_RESET_URL || FRONTEND_ORIGIN;
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || process.env.SMTP_USER || 'mathtrunet102@gmail.com';
 const CONTACT_EMAIL_TO = process.env.CONTACT_EMAIL_TO || REPORT_EMAIL_TO;
@@ -35,13 +34,9 @@ app.use('/api', (req, res, next) => {
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
-const updateUserVerificationStmt = db.prepare(
-  'UPDATE users SET verification_token = ?, verification_token_expires_at = ?, email_verified = 0 WHERE id = ?'
-);
 const updateUserResetTokenStmt = db.prepare(
   'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?'
 );
-const findUserByVerificationTokenStmt = db.prepare('SELECT * FROM users WHERE verification_token = ?');
 const findUserByResetTokenStmt = db.prepare('SELECT * FROM users WHERE password_reset_token = ?');
 const verifyUserStmt = db.prepare(
   'UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?'
@@ -161,11 +156,6 @@ const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
-const buildVerificationLink = (token) => {
-  const baseUrl = EMAIL_VERIFICATION_URL.replace(/\/$/, '');
-  return `${baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
-};
-
 const buildPasswordResetLink = (token) => {
   const baseUrl = PASSWORD_RESET_URL.replace(/\/$/, '');
   return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
@@ -222,14 +212,13 @@ const sendEmail = async ({ recipient, subject, text, html, attachments = [] }) =
   return { sent: true, to: recipient };
 };
 
-const sendVerificationEmail = async (recipient, verificationUrl) => {
-  const subject = 'Vérifiez votre adresse email';
-  const text = `Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) : ${verificationUrl}`;
+const sendPasswordSetupEmail = async (recipient, resetUrl) => {
+  const subject = 'Créez votre mot de passe';
+  const text = `Bienvenue ! Créez votre mot de passe en cliquant sur ce lien (valide 24h) : ${resetUrl}`;
   const html = `
-      <p>Bienvenue ! Merci de confirmer votre email en cliquant sur le lien suivant (valide 24h) :</p>
-      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
+      <p>Bienvenue ! Créez votre mot de passe en cliquant sur ce lien (valide 24h) :</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
     `;
-
   return sendEmail({ recipient, subject, text, html });
 };
 
@@ -449,9 +438,9 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/register', async (req, res) => {
   try {
-    const { email, password, role = 'producer' } = req.body ?? {};
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email et mot de passe requis.' });
+    const { email, role = 'producer' } = req.body ?? {};
+    if (!email) {
+      return res.status(400).json({ error: 'Email requis.' });
     }
     if (!['producer', 'admin', 'buyer'].includes(role)) {
       return res.status(400).json({ error: 'Rôle invalide.' });
@@ -462,30 +451,30 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: 'Email déjà utilisé.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const temporaryPassword = crypto.randomBytes(24).toString('hex');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
     const result = insertUserStmt.run(email, passwordHash, role);
-    const verificationToken = generateVerificationToken();
+    verifyUserStmt.run(result.lastInsertRowid);
+    const resetToken = generateVerificationToken();
     const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
-
-    updateUserVerificationStmt.run(verificationToken, expiresAt, result.lastInsertRowid);
-
-    const verificationUrl = buildVerificationLink(verificationToken);
+    updateUserResetTokenStmt.run(resetToken, expiresAt, result.lastInsertRowid);
+    const resetUrl = buildPasswordResetLink(resetToken);
     let emailDelivery = null;
 
     try {
-      emailDelivery = await sendVerificationEmail(email, verificationUrl);
+      emailDelivery = await sendPasswordSetupEmail(email, resetUrl);
     } catch (sendError) {
-      console.error('Erreur envoi email de vérification', sendError);
+      console.error('Erreur envoi email de création mot de passe', sendError);
       deleteUserByIdStmt.run(result.lastInsertRowid);
       emailDelivery = {
         sent: false,
         to: email,
-        error: sendError?.message || "Impossible d'envoyer l'email de vérification.",
+        error: sendError?.message || "Impossible d'envoyer l'email de création de mot de passe.",
       };
       return res
         .status(500)
         .json({
-          error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer.",
+          error: "Impossible d'envoyer l'email de création de mot de passe. Veuillez réessayer.",
           data: { emailDelivery },
         });
     }
@@ -493,7 +482,7 @@ app.post('/api/register', async (req, res) => {
     res
       .status(201)
       .json({
-        data: { id: result.lastInsertRowid, email, role, emailVerified: false, emailDelivery },
+        data: { id: result.lastInsertRowid, email, role, emailVerified: true, emailDelivery },
       });
   } catch (error) {
     console.error('Erreur register', error);
@@ -515,96 +504,6 @@ app.get('/api/siret/:siret', (req, res) => {
       city: entreprise?.city ?? null,
     },
   });
-});
-
-app.get('/api/verify-email', (req, res) => {
-  try {
-    const { token } = req.query ?? {};
-    if (!token) {
-      return res.status(400).json({ error: 'Token manquant.' });
-    }
-
-    const user = findUserByVerificationTokenStmt.get(token);
-    if (!user) {
-      return res.status(400).json({ error: 'Lien de vérification invalide.' });
-    }
-
-    if (!user.verification_token_expires_at) {
-      return res.status(400).json({ error: 'Lien de vérification invalide.' });
-    }
-
-    const expiresAt = new Date(user.verification_token_expires_at).getTime();
-    if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
-      return res.status(400).json({ error: 'Lien de vérification expiré.' });
-    }
-
-    verifyUserStmt.run(user.id);
-
-    return res.json({ data: { message: 'Email vérifié avec succès.' } });
-  } catch (error) {
-    console.error('Erreur verify-email', error);
-    res.status(500).json({ error: "Impossible de vérifier cet email." });
-  }
-});
-
-app.post('/api/resend-verification', async (req, res) => {
-  try {
-    const { email } = req.body ?? {};
-    if (!email) {
-      return res.status(400).json({ error: 'Adresse email requise.' });
-    }
-
-    const user = findUserByEmailStmt.get(email);
-    if (!user) {
-      return res.json({
-        data: {
-          emailDelivery: {
-            sent: false,
-            to: email,
-            error: "Aucun compte associé à cette adresse.",
-          },
-        },
-      });
-    }
-
-    if (user.email_verified) {
-      return res.json({
-        data: {
-          emailDelivery: {
-            sent: false,
-            to: email,
-            error: 'Cet email est déjà vérifié.',
-          },
-        },
-      });
-    }
-
-    const verificationToken = generateVerificationToken();
-    const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
-    updateUserVerificationStmt.run(verificationToken, expiresAt, user.id);
-    const verificationUrl = buildVerificationLink(verificationToken);
-
-    let emailDelivery = null;
-    try {
-      emailDelivery = await sendVerificationEmail(email, verificationUrl);
-    } catch (sendError) {
-      console.error('Erreur envoi email de vérification', sendError);
-      emailDelivery = {
-        sent: false,
-        to: email,
-        error: sendError?.message || "Impossible d'envoyer l'email de vérification.",
-      };
-      return res.status(500).json({
-        error: "Impossible d'envoyer l'email de vérification. Veuillez réessayer.",
-        data: { emailDelivery },
-      });
-    }
-
-    return res.json({ data: { emailDelivery } });
-  } catch (error) {
-    console.error('Erreur resend-verification', error);
-    return res.status(500).json({ error: "Impossible d'envoyer l'email de vérification." });
-  }
 });
 
 app.post('/api/password-reset', async (req, res) => {
@@ -764,10 +663,6 @@ app.post('/api/login', async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
       return res.status(400).json({ error: 'Identifiants incorrects.' });
-    }
-
-    if (!user.email_verified) {
-      return res.status(403).json({ error: 'Email non vérifié.' });
     }
 
     const token = generateToken(user);

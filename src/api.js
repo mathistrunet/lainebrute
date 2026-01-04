@@ -133,17 +133,11 @@ export const api = {
     storeToken(token);
     return getCurrentUser();
   },
-  register: (email, password, role = 'producer') =>
+  register: (email, role = 'producer') =>
     request('/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, role }),
     }),
-  verifyEmail: (token) => {
-    if (!token) {
-      return Promise.reject(new Error('Lien de vérification invalide.'));
-    }
-    return request(`/verify-email?token=${encodeURIComponent(token)}`);
-  },
   saveProfile: (email, profile) => saveProfile(email, profile),
   getProfile,
   verifySiret: (siret) => request(`/siret/${encodeURIComponent(siret ?? '')}`),
@@ -152,15 +146,6 @@ export const api = {
       throw new Error('Adresse email requise.');
     }
     return request('/password-reset', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-  },
-  resendVerificationEmail: async (email) => {
-    if (!email) {
-      throw new Error('Adresse email requise.');
-    }
-    return request('/resend-verification', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
