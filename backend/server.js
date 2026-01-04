@@ -25,6 +25,13 @@ const CONTACT_EMAIL_TO = process.env.CONTACT_EMAIL_TO || REPORT_EMAIL_TO;
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+app.set('etag', false);
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 
 const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
 const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
