@@ -8,7 +8,6 @@ import ProducerProfilePage from './pages/ProducerProfilePage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import TermsPage from './pages/TermsPage.jsx';
 import ContactPage from './pages/ContactPage.jsx';
-import VerifyEmailPage from './pages/VerifyEmail.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 
 function App() {
@@ -23,7 +22,6 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/conditions" element={<TermsPage />} />
         <Route path="/contact" element={<ContactPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
     </Routes>

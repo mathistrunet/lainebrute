@@ -12,7 +12,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [mode, setMode] = useState(defaultMode);
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState('buyer');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -44,7 +43,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
 
   const resetForm = () => {
     setPassword('');
-    setConfirmPassword('');
     setMessage('');
     setError('');
   };
@@ -82,11 +80,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
       resetForm();
     } catch (loginError) {
       const message = loginError.message || "Impossible de s'identifier";
-      if (message.toLowerCase().includes('email non vérifié')) {
-        setError('Email non vérifié. Consultez vos emails pour activer votre compte.');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setStatus('idle');
     }
@@ -99,12 +93,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setMessage('');
     setEmailDelivery(null);
 
-    if (password !== confirmPassword) {
-      setStatus('idle');
-      setError('La confirmation du mot de passe ne correspond pas.');
-      return;
-    }
-
     if (isProducer && (!companyName.trim() || !siret.trim())) {
       setStatus('idle');
       setError("Merci de renseigner le nom de l'entreprise et le SIRET.");
@@ -112,7 +100,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
 
     try {
-      const result = await api.register(email.trim(), password.trim(), role);
+      const result = await api.register(email.trim(), role);
       const delivery = result?.emailDelivery ?? null;
       updateUserProfile(user, {
         firstName: firstName.trim(),
@@ -127,7 +115,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
         onUserChange?.({ ...user, profile });
       }
       setMode('login');
-      setMessage('Compte créé. Vérifiez vos emails pour activer votre compte.');
+      setMessage('Compte créé. Consultez vos emails pour créer votre mot de passe.');
       setEmailDelivery(delivery);
       resetForm();
     } catch (registerError) {
@@ -157,37 +145,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     } catch (forgotError) {
       setEmailDelivery(forgotError.details?.emailDelivery ?? null);
       setError(forgotError.message || 'Impossible de traiter la demande.');
-    } finally {
-      setStatus('idle');
-    }
-  };
-
-  const handleResendVerification = async () => {
-    const requestedEmail = window.prompt(
-      "À quelle adresse souhaitez-vous renvoyer l'email d'activation ?",
-      email.trim()
-    );
-    const targetEmail = requestedEmail?.trim();
-    if (!targetEmail) {
-      return;
-    }
-    setStatus('loading');
-    setError('');
-    setMessage('');
-    setEmailDelivery(null);
-    setEmail(targetEmail);
-    try {
-      const result = await api.resendVerificationEmail(targetEmail);
-      const delivery = result?.emailDelivery ?? null;
-      setEmailDelivery(delivery);
-      if (delivery?.sent) {
-        setMessage(`Email d'activation renvoyé à ${delivery.to}.`);
-      } else {
-        setError(delivery?.error || "Impossible d'envoyer l'email d'activation.");
-      }
-    } catch (resendError) {
-      setEmailDelivery(resendError.details?.emailDelivery ?? null);
-      setError(resendError.message || "Impossible d'envoyer l'email d'activation.");
     } finally {
       setStatus('idle');
     }
@@ -296,14 +253,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
               Mot de passe oublié ?
             </button>
           </div>
-          <button
-            type="button"
-            className="ghost"
-            onClick={handleResendVerification}
-            disabled={status === 'loading' || !email.trim()}
-          >
-            Renvoyer l&apos;email d&apos;activation
-          </button>
           {error && <p className="error">{error}</p>}
           {emailDeliveryMessage && (
             <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
@@ -422,32 +371,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
                 placeholder="vous@example.fr"
               />
             </label>
-            <label>
-              Mot de passe
-              <input
-                type="password"
-                name="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                required
-                minLength={6}
-                placeholder="••••••••"
-              />
-            </label>
-            <label>
-              Confirmation du mot de passe
-              <input
-                type="password"
-                name="confirm-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                autoComplete="new-password"
-                required
-                minLength={6}
-                placeholder="••••••••"
-              />
-            </label>
           </div>
 
           <div className="identity-panel__actions">
@@ -455,7 +378,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
               {status === 'loading' ? 'En cours...' : 'Enregistrer'}
             </button>
             <small className="muted">
-              Vos informations seront utilisées pour adapter votre expérience et sécuriser vos accès.
+              Vous recevrez un email pour créer votre mot de passe et finaliser la connexion.
             </small>
           </div>
           {error && <p className="error">{error}</p>}
