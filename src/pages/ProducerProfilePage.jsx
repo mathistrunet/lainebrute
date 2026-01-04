@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 
-const normalizeText = (value) => value?.trim().toLowerCase();
 const formatDate = (value) => {
   if (!value) return 'Date inconnue';
   const date = new Date(value);
@@ -22,6 +21,13 @@ function ProducerProfilePage() {
   const [producerAds, setProducerAds] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
+  const contact =
+    producer?.contact ?? {
+      first_name: producer?.first_name ?? null,
+      last_name: producer?.last_name ?? null,
+      phone: producer?.phone ?? null,
+      siret: producer?.siret ?? null,
+    };
 
   useEffect(() => {
     let isMounted = true;
@@ -79,13 +85,8 @@ function ProducerProfilePage() {
   }, [currentUserId, currentUserRole, isSelfView, producerId]);
 
   const isOwner = useMemo(
-    () =>
-      Boolean(
-        producer &&
-          currentUser?.role === 'producer' &&
-          normalizeText(currentUser?.profile?.companyName) === normalizeText(producer.name)
-      ),
-    [producer, currentUser]
+    () => Boolean(isSelfView && currentUser?.role === 'producer'),
+    [isSelfView, currentUser]
   );
 
   if (isSelfView && !currentUser) {
@@ -132,6 +133,20 @@ function ProducerProfilePage() {
     );
   }
 
+  if (isSelfView && !producer) {
+    return (
+      <section className="producer-profile">
+        <h1>Ma page producteur</h1>
+        <p className="muted">
+          Vous n&apos;avez pas encore renseigné vos informations producteur.
+        </p>
+        <Link to="/producteur" className="ghost">
+          Créer mon profil producteur
+        </Link>
+      </section>
+    );
+  }
+
   if (!producer) {
     return (
       <section className="producer-profile">
@@ -167,26 +182,22 @@ function ProducerProfilePage() {
       <div className="grid-2-cols">
         <div className="card">
           <h2>Présentation</h2>
-          <p>{producer.description}</p>
+          <p>{producer.description || 'Présentation non renseignée.'}</p>
           <dl className="description-list">
             <div>
               <dt>Contact</dt>
               <dd>
                 <div>
-                  {producer.first_name || producer.last_name
-                    ? `${producer.first_name ?? ''} ${producer.last_name ?? ''}`.trim()
+                  {contact.first_name || contact.last_name
+                    ? `${contact.first_name ?? ''} ${contact.last_name ?? ''}`.trim()
                     : 'Non renseigné'}
                 </div>
-                <div>{producer.phone ?? 'Non renseigné'}</div>
+                <div>{contact.phone ?? 'Non renseigné'}</div>
               </dd>
             </div>
             <div>
-              <dt>Site web</dt>
-              <dd>Non renseigné</dd>
-            </div>
-            <div>
-              <dt>Disponibilités</dt>
-              <dd>Non renseigné</dd>
+              <dt>SIRET</dt>
+              <dd>{contact.siret ?? 'Non renseigné'}</dd>
             </div>
           </dl>
         </div>
