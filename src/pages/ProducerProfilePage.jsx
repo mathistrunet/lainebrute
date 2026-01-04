@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ads, producers } from '../data/marketData.js';
 import { api } from '../api.js';
 
 const normalizeText = (value) => value?.trim().toLowerCase();
@@ -9,31 +8,74 @@ function ProducerProfilePage() {
   const { producerId } = useParams();
   const currentUser = api.getCurrentUser();
   const isSelfView = !producerId;
+  const [producer, setProducer] = useState(null);
+  const [producerAds, setProducerAds] = useState([]);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
 
-  const producer = useMemo(() => {
-    if (producerId) {
-      return producers.find((item) => item.id === producerId) ?? null;
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProducerData = async () => {
+      setStatus('loading');
+      setError('');
+      try {
+        let resolvedProducer = null;
+
+        if (isSelfView) {
+          resolvedProducer = await api.getMyProducerProfile();
+        } else {
+          const producers = await api.getProducers();
+          resolvedProducer = producers.find(
+            (item) => String(item.id) === String(producerId)
+          );
+        }
+
+        if (!isMounted) return;
+        setProducer(resolvedProducer ?? null);
+
+        const offers = await api.getOffers();
+        if (!isMounted) return;
+
+        const filteredAds = Array.isArray(offers)
+          ? offers.filter((ad) => String(ad.producer_id) === String(resolvedProducer?.id))
+          : [];
+
+        setProducerAds(
+          filteredAds.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        );
+      } catch (fetchError) {
+        console.error(fetchError);
+        if (!isMounted) return;
+        setError('Impossible de récupérer les données du producteur.');
+      } finally {
+        if (isMounted) {
+          setStatus('idle');
+        }
+      }
+    };
+
+    if (isSelfView && !currentUser) {
+      return () => {
+        isMounted = false;
+      };
     }
 
-    const companyName = normalizeText(currentUser?.profile?.companyName);
-    if (!companyName) {
-      return null;
-    }
+    loadProducerData();
 
-    return producers.find((item) => normalizeText(item.name) === companyName) ?? null;
-  }, [producerId, currentUser]);
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, isSelfView, producerId]);
 
-  const producerAds = useMemo(() => {
-    if (!producer) return [];
-    return ads
-      .filter((ad) => ad.producerId === producer.id)
-      .sort((a, b) => new Date(a.availableFrom) - new Date(b.availableFrom));
-  }, [producer]);
-
-  const isOwner = Boolean(
-    producer &&
-      currentUser?.role === 'producer' &&
-      normalizeText(currentUser?.profile?.companyName) === normalizeText(producer.name)
+  const isOwner = useMemo(
+    () =>
+      Boolean(
+        producer &&
+          currentUser?.role === 'producer' &&
+          normalizeText(currentUser?.profile?.companyName) === normalizeText(producer.name)
+      ),
+    [producer, currentUser]
   );
 
   if (isSelfView && !currentUser) {
@@ -53,6 +95,26 @@ function ProducerProfilePage() {
       <section className="producer-profile">
         <h1>Ma page producteur</h1>
         <p className="error">Cette page est réservée aux producteurs enregistrés.</p>
+        <Link to="/annonces" className="ghost">
+          Retour aux annonces
+        </Link>
+      </section>
+    );
+  }
+
+  if (status === 'loading') {
+    return (
+      <section className="producer-profile">
+        <h1>Chargement du producteur...</h1>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="producer-profile">
+        <h1>Producteur introuvable</h1>
+        <p className="error">{error}</p>
         <Link to="/annonces" className="ghost">
           Retour aux annonces
         </Link>
@@ -100,17 +162,21 @@ function ProducerProfilePage() {
             <div>
               <dt>Contact</dt>
               <dd>
-                <div>{producer.contactEmail}</div>
-                <div>{producer.contactPhone}</div>
+                <div>
+                  {producer.first_name || producer.last_name
+                    ? `${producer.first_name ?? ''} ${producer.last_name ?? ''}`.trim()
+                    : 'Non renseigné'}
+                </div>
+                <div>{producer.phone ?? 'Non renseigné'}</div>
               </dd>
             </div>
             <div>
               <dt>Site web</dt>
-              <dd>{producer.website}</dd>
+              <dd>Non renseigné</dd>
             </div>
             <div>
               <dt>Disponibilités</dt>
-              <dd>{producer.availability}</dd>
+              <dd>Non renseigné</dd>
             </div>
           </dl>
         </div>
@@ -123,11 +189,10 @@ function ProducerProfilePage() {
           <ul className="card-list">
             {producerAds.map((ad) => (
               <li key={ad.id} className="card">
-                <div className="eyebrow">{ad.category}</div>
+                <div className="eyebrow">Annonce producteur</div>
                 <h3>{ad.title}</h3>
                 <p>{ad.description}</p>
-                <p>Race : {ad.race}</p>
-                <p>Disponible à partir du : {ad.availableFrom}</p>
+                <p>Publié le : {ad.created_at}</p>
               </li>
             ))}
           </ul>
