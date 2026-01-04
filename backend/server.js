@@ -18,7 +18,7 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
-const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL;
+const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL || FRONTEND_ORIGIN;
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'mathtrunet100@gmailcom';
 
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
@@ -143,7 +143,10 @@ const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
-const buildVerificationLink = (token) => `${APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
+const buildVerificationLink = (token) => {
+  const baseUrl = EMAIL_VERIFICATION_URL.replace(/\/$/, '');
+  return `${baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
+};
 
 // Centralise la lecture de la configuration SMTP depuis les variables d'environnement.
 const getSmtpConfig = () => ({
