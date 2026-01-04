@@ -665,6 +665,10 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Identifiants incorrects.' });
     }
 
+    if (!user.email_verified) {
+      verifyUserStmt.run(user.id);
+    }
+
     const token = generateToken(user);
     res.json({ data: { token } });
   } catch (error) {
