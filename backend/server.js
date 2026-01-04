@@ -98,6 +98,7 @@ const listOffersStmt = db.prepare(`
   FROM offers o
   JOIN users u ON u.id = o.user_id
   LEFT JOIN producers p ON p.id = o.producer_id
+  WHERE datetime(o.created_at) >= datetime('now', '-1 year')
   ORDER BY o.created_at DESC
 `);
 const listOffersByUserStmt = db.prepare(`
@@ -113,6 +114,7 @@ const listOffersByUserStmt = db.prepare(`
   JOIN users u ON u.id = o.user_id
   LEFT JOIN producers p ON p.id = o.producer_id
   WHERE o.user_id = ?
+    AND datetime(o.created_at) >= datetime('now', '-1 year')
   ORDER BY o.created_at DESC
 `);
 const insertOfferStmt = db.prepare(
