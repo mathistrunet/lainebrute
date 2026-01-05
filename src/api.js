@@ -10,7 +10,6 @@ const API_BASE_URL = NORMALIZED_API_BASE_URL.endsWith('/api')
   ? NORMALIZED_API_BASE_URL
   : `${NORMALIZED_API_BASE_URL}/api`;
 const TOKEN_STORAGE_KEY = 'lainebrute.jwt';
-const PROFILE_STORAGE_KEY = 'lainebrute.profiles';
 
 const getStorage = () => runtime.localStorage ?? null;
 
@@ -55,50 +54,10 @@ const decodeTokenPayload = (token) => {
   }
 };
 
-const getProfiles = () => {
-  const storage = getStorage();
-  if (!storage) return {};
-  try {
-    return JSON.parse(storage.getItem(PROFILE_STORAGE_KEY)) ?? {};
-  } catch (error) {
-    console.warn('Impossible de lire les profils stockés', error);
-    return {};
-  }
-};
-
-const persistProfiles = (profiles) => {
-  const storage = getStorage();
-  if (!storage) return;
-  storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
-};
-
-const removeProfile = (email) => {
-  if (!email) return;
-  const profiles = getProfiles();
-  if (profiles[email]) {
-    delete profiles[email];
-    persistProfiles(profiles);
-  }
-};
-
-const saveProfile = (email, profile) => {
-  if (!email) return null;
-  const profiles = getProfiles();
-  profiles[email] = { ...(profiles[email] ?? {}), ...profile };
-  persistProfiles(profiles);
-  return profiles[email];
-};
-
-const getProfile = (email) => {
-  if (!email) return null;
-  const profiles = getProfiles();
-  return profiles[email] ?? null;
-};
-
 const getCurrentUser = () => {
   const payload = decodeTokenPayload(getToken());
   if (!payload) return null;
-  return { ...payload, profile: getProfile(payload.email) };
+  return { ...payload };
 };
 
 async function request(path, options = {}) {
@@ -151,9 +110,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, role }),
     }),
-  saveProfile: (email, profile) => saveProfile(email, profile),
-  removeProfile,
-  getProfile,
   requestPasswordReset: async (email) => {
     if (!email) {
       throw new Error('Adresse email requise.');

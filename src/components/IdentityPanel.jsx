@@ -13,33 +13,18 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('buyer');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [siret, setSiret] = useState('');
   const [status, setStatus] = useState('idle');
-  const [deleteStatus, setDeleteStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [deleteError, setDeleteError] = useState('');
   const [emailDelivery, setEmailDelivery] = useState(null);
-
-  const isProfileMode = mode === 'profile';
-  const isProducer = role === 'producer';
 
   useEffect(() => {
     setMode(defaultMode);
   }, [defaultMode]);
 
   useEffect(() => {
-    if (user?.profile) {
-      setFirstName(user.profile.firstName ?? '');
-      setLastName(user.profile.lastName ?? '');
-      setPhone(user.profile.phone ?? '');
-      setRole(user.profile.role ?? user.role ?? 'buyer');
-      setCompanyName(user.profile.companyName ?? '');
-      setSiret(user.profile.siret ?? '');
+    if (user) {
+      setRole(user.role ?? 'buyer');
       setEmail(user.email ?? '');
     }
   }, [user]);
@@ -61,11 +46,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     return `Email non envoyé à ${delivery.to}.${reason}`;
   };
 
-  const updateUserProfile = (baseUser, profile) => {
-    const updatedProfile = api.saveProfile(baseUser?.email ?? email, profile);
-    return baseUser ? { ...baseUser, profile: updatedProfile } : null;
-  };
-
   const handleLogin = async (event) => {
     event.preventDefault();
     setStatus('loading');
@@ -74,9 +54,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setEmailDelivery(null);
     try {
       const loggedUser = await api.login(email.trim(), password.trim());
-      const profile = api.getProfile(loggedUser?.email ?? email);
-      const enrichedUser = { ...loggedUser, profile };
-      onUserChange?.(enrichedUser);
+      onUserChange?.(loggedUser);
       setMessage('Connexion réussie.');
       navigate('/');
       onClose?.();
@@ -96,27 +74,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     setMessage('');
     setEmailDelivery(null);
 
-    if (isProducer && !companyName.trim()) {
-      setStatus('idle');
-      setError("Merci de renseigner le nom de l'entreprise.");
-      return;
-    }
-
     try {
       const result = await api.register(email.trim(), role);
       const delivery = result?.emailDelivery ?? null;
-      updateUserProfile(user, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
-        role,
-        companyName: companyName.trim(),
-        siret: siret.trim(),
-      });
-      if (user) {
-        const profile = api.getProfile(user.email);
-        onUserChange?.({ ...user, profile });
-      }
       setMode('login');
       setMessage('Compte créé. Consultez vos emails pour créer votre mot de passe.');
       setEmailDelivery(delivery);
@@ -127,37 +87,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     } finally {
       setStatus('idle');
     }
-  };
-
-  const handleProfileSave = (event) => {
-    event.preventDefault();
-    if (!user) {
-      setError("Impossible de modifier un profil sans compte connecté.");
-      return;
-    }
-    setStatus('loading');
-    setError('');
-    setMessage('');
-    setEmailDelivery(null);
-
-    if (isProducer && !companyName.trim()) {
-      setStatus('idle');
-      setError("Merci de renseigner le nom de l'entreprise.");
-      return;
-    }
-
-    const updatedProfile = updateUserProfile(user, {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phone: phone.trim(),
-      role,
-      companyName: companyName.trim(),
-      siret: siret.trim(),
-    });
-
-    onUserChange?.({ ...user, role, profile: updatedProfile });
-    setStatus('idle');
-    setMessage('Profil mis à jour.');
   };
 
   const handleForgotPassword = async (event) => {
@@ -184,33 +113,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!user) {
-      return;
-    }
-    const warningMessage =
-      'Attention : la suppression du compte est irréversible. Toutes vos informations et annonces seront supprimées. Confirmez-vous la suppression ?';
-    const confirmed = window.confirm(warningMessage);
-    if (!confirmed) {
-      return;
-    }
-
-    setDeleteStatus('loading');
-    setDeleteError('');
-    try {
-      await api.deleteAccount();
-      api.removeProfile(user.email);
-      api.logout();
-      onUserChange?.(null);
-      navigate('/');
-      onClose?.();
-    } catch (deleteError) {
-      setDeleteError(deleteError.message || "Impossible de supprimer le compte.");
-    } finally {
-      setDeleteStatus('idle');
-    }
-  };
-
   const tabs = useMemo(
     () => [
       { value: 'login', label: 'Connexion' },
@@ -222,11 +124,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const showForgot = mode === 'forgot';
   const formTitle = showForgot
     ? 'Mot de passe oublié'
-    : isProfileMode
-      ? 'Modifier vos informations'
-      : mode === 'register'
-        ? 'Créez votre compte'
-        : 'Accédez à vos espaces';
+    : mode === 'register'
+      ? 'Créez votre compte'
+      : 'Accédez à vos espaces';
   const emailDeliveryMessage = formatEmailDelivery(emailDelivery);
   const emailDeliveryHasError = emailDeliveryMessage && !emailDelivery?.sent;
 
@@ -243,7 +143,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
           </p>
         </div>
         <div className="identity-panel__controls">
-          {!showForgot && !isProfileMode && (
+          {!showForgot && (
             <div className="identity-panel__switch">
               {tabs.map((tab) => (
                 <button
@@ -267,10 +167,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
         <div className="identity-panel__card">
           <div>
             <p className="muted">Connecté</p>
-            <p className="identity-panel__user">
-              {[user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(' ') ||
-                user.email}
-            </p>
+            <p className="identity-panel__user">{user.email}</p>
             <p className="tag">Rôle : {user.role}</p>
           </div>
           <div className="identity-panel__actions">
@@ -352,41 +249,9 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
         </form>
       )}
 
-      {(mode === 'register' || mode === 'profile') && (
-        <form
-          className="identity-panel__card identity-panel__form"
-          onSubmit={isProfileMode ? handleProfileSave : handleRegister}
-        >
+      {mode === 'register' && (
+        <form className="identity-panel__card identity-panel__form" onSubmit={handleRegister}>
           <div className="identity-grid">
-            <label>
-              Nom
-              <input
-                type="text"
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
-                required
-                placeholder="Votre nom"
-              />
-            </label>
-            <label>
-              Prénom
-              <input
-                type="text"
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
-                required
-                placeholder="Votre prénom"
-              />
-            </label>
-            <label>
-              Téléphone
-              <input
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="06 12 34 56 78"
-              />
-            </label>
             <label>
               Statut
               <select value={role} onChange={(event) => setRole(event.target.value)}>
@@ -397,33 +262,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
                 ))}
               </select>
             </label>
-          </div>
-
-          {isProducer && (
-            <div className="identity-grid">
-              <label>
-                Nom de l'entreprise
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                  required={isProducer}
-                  placeholder="Ferme du bocage"
-                />
-              </label>
-              <label>
-                Numéro de SIRET
-                <input
-                  type="text"
-                  value={siret}
-                  onChange={(event) => setSiret(event.target.value)}
-                  placeholder="SIRET"
-                />
-              </label>
-            </div>
-          )}
-
-          <div className="identity-grid">
             <label>
               Email
               <input
@@ -434,7 +272,6 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
                 autoComplete="email"
                 required
                 placeholder="vous@example.fr"
-                disabled={isProfileMode}
               />
             </label>
           </div>
@@ -443,35 +280,15 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             <button type="submit" disabled={status === 'loading'}>
               {status === 'loading' ? 'En cours...' : 'Enregistrer'}
             </button>
-            {!isProfileMode && (
-              <small className="muted">
-                Vous recevrez un email pour créer votre mot de passe et finaliser la connexion.
-              </small>
-            )}
-            {isProfileMode && (
-              <small className="muted">
-                L&apos;adresse email de connexion ne peut pas être modifiée depuis cet écran.
-              </small>
-            )}
+            <small className="muted">
+              Vous recevrez un email pour créer votre mot de passe et finaliser la connexion.
+            </small>
           </div>
           {error && <p className="error">{error}</p>}
           {emailDeliveryMessage && (
             <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
           )}
           {message && !error && <p className="success">{message}</p>}
-
-          {mode === 'profile' && user && (
-            <div className="identity-panel__danger">
-              <p className="error">
-                ⚠️ Supprimer votre compte effacera toutes vos informations et vos annonces. Cette action est
-                irréversible.
-              </p>
-              <button type="button" className="ghost" onClick={handleDeleteAccount} disabled={deleteStatus === 'loading'}>
-                {deleteStatus === 'loading' ? 'Suppression...' : 'Supprimer mon compte'}
-              </button>
-              {deleteError && <p className="error">{deleteError}</p>}
-            </div>
-          )}
         </form>
       )}
     </section>
