@@ -10,6 +10,7 @@ const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""
 const getTableColumns = (table) =>
   db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all();
 
+
 const ensureColumn = (table, column, definition) => {
   const columns = getTableColumns(table);
   const columnNames = columns.map((info) => info.name);
