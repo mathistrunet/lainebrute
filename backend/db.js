@@ -31,8 +31,6 @@ const ensureColumn = (table, column, definition) => {
 db.pragma('foreign_keys = ON');
 
 const createTables = () => {
-  resetDatabaseIfInvalidSchema();
-
   db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
