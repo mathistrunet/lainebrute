@@ -92,6 +92,7 @@ const createTables = () => {
       sheep_breed TEXT,
       description TEXT,
       city TEXT,
+      expiration_notice_sent_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (producer_id) REFERENCES producers(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -197,6 +198,7 @@ const ensureOfferOwners = () => {
   ensureColumn('offers', 'quantity_kg', 'REAL');
   ensureColumn('offers', 'delivery_radius_km', 'INTEGER');
   ensureColumn('offers', 'sheep_breed', 'TEXT');
+  ensureColumn('offers', 'expiration_notice_sent_at', 'TEXT');
 
   const fillOwnerStmt = db.prepare(
     `UPDATE offers SET user_id = (SELECT user_id FROM producers WHERE producers.id = offers.producer_id)

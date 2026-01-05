@@ -19,8 +19,10 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [companyName, setCompanyName] = useState('');
   const [siret, setSiret] = useState('');
   const [status, setStatus] = useState('idle');
+  const [deleteStatus, setDeleteStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [emailDelivery, setEmailDelivery] = useState(null);
 
   const isProducer = role === 'producer';
@@ -147,6 +149,33 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
       setError(forgotError.message || 'Impossible de traiter la demande.');
     } finally {
       setStatus('idle');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      return;
+    }
+    const warningMessage =
+      'Attention : la suppression du compte est irréversible. Toutes vos informations et annonces seront supprimées. Confirmez-vous la suppression ?';
+    const confirmed = window.confirm(warningMessage);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteStatus('loading');
+    setDeleteError('');
+    try {
+      await api.deleteAccount();
+      api.removeProfile(user.email);
+      api.logout();
+      onUserChange?.(null);
+      navigate('/');
+      onClose?.();
+    } catch (deleteError) {
+      setDeleteError(deleteError.message || "Impossible de supprimer le compte.");
+    } finally {
+      setDeleteStatus('idle');
     }
   };
 
@@ -385,6 +414,19 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             <p className={emailDeliveryHasError ? 'error' : 'success'}>{emailDeliveryMessage}</p>
           )}
           {message && !error && <p className="success">{message}</p>}
+
+          {mode === 'profile' && user && (
+            <div className="identity-panel__danger">
+              <p className="error">
+                ⚠️ Supprimer votre compte effacera toutes vos informations et vos annonces. Cette action est
+                irréversible.
+              </p>
+              <button type="button" className="ghost" onClick={handleDeleteAccount} disabled={deleteStatus === 'loading'}>
+                {deleteStatus === 'loading' ? 'Suppression...' : 'Supprimer mon compte'}
+              </button>
+              {deleteError && <p className="error">{deleteError}</p>}
+            </div>
+          )}
         </form>
       )}
     </section>
