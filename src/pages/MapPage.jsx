@@ -71,6 +71,7 @@ function MapPage() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
   const [reportDefaultCategory, setReportDefaultCategory] = useState('producer');
+  const [offerProducerIds, setOfferProducerIds] = useState(() => new Set());
   const highlightTimeoutRef = useRef(null);
   const itemRefs = useRef(new Map());
 
@@ -125,24 +126,53 @@ function MapPage() {
     loadProducers();
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadOffers = async () => {
+      try {
+        const offers = await api.getOffers();
+        if (!Array.isArray(offers)) return;
+        const ids = new Set(
+          offers
+            .map((offer) => offer?.producer_id ?? offer?.producer?.id)
+            .filter((id) => id !== null && id !== undefined)
+            .map((id) => String(id))
+        );
+        if (isMounted) {
+          setOfferProducerIds(ids);
+        }
+      } catch (fetchError) {
+        console.error(fetchError);
+      }
+    };
+
+    loadOffers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const markers = useMemo(
     () =>
       producers
         .map((producer) => {
           const coordinates = resolveProducerCoordinates(producer);
           if (!coordinates) return null;
+          const markerId = producer.id ?? `${coordinates.lat}:${coordinates.lng}`;
+          const markerIdKey = markerId !== null && markerId !== undefined ? String(markerId) : null;
           return {
-            id: producer.id ?? `${coordinates.lat}:${coordinates.lng}`,
+            id: markerIdKey ?? `${coordinates.lat}:${coordinates.lng}`,
             name: producer.name ?? producer.title ?? 'Producteur',
             city: producer.city,
             lat: coordinates.lat,
             lng: coordinates.lng,
             quantity: producer.quantity,
             status: producer.status,
+            hasAds: markerIdKey ? offerProducerIds.has(markerIdKey) : false,
           };
         })
         .filter(Boolean),
-    [producers]
+    [producers, offerProducerIds]
   );
 
   useEffect(
@@ -313,10 +343,10 @@ function MapPage() {
             {isPanelOpen ? 'Masquer la liste' : 'Voir la liste des producteurs'}
           </button>
           <div className="map-legend">
-            <p className="eyebrow">Statut</p>
+            <p className="eyebrow">Statut des producteurs</p>
             <ul>
-              <li><span className="dot dot--primary" /> Producteur actif</li>
-              <li><span className="dot" /> Autres annonces</li>
+              <li><span className="dot" /> Producteur</li>
+              <li><span className="dot dot--has-ads" /> Producteur avec annonces</li>
             </ul>
             {status === 'loading' && <small className="muted">Chargement des producteurs...</small>}
             {error && <small className="error">{error}</small>}
