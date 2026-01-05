@@ -45,6 +45,7 @@ const updateUserPasswordStmt = db.prepare(
   'UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_token_expires_at = NULL WHERE id = ?'
 );
 const deleteUserByIdStmt = db.prepare('DELETE FROM users WHERE id = ?');
+const deleteOffersByUserIdStmt = db.prepare('DELETE FROM offers WHERE user_id = ?');
 const updateUserAdminStmt = db.prepare(
   'UPDATE users SET email = ?, role = ?, is_blocked = ? WHERE id = ?'
 );
@@ -162,6 +163,21 @@ const selectOfferWithOwnerStmt = db.prepare(`
   WHERE o.id = ?
 `);
 const deleteOfferStmt = db.prepare('DELETE FROM offers WHERE id = ?');
+const selectOffersForExpirationNoticeStmt = db.prepare(`
+  SELECT o.id, o.title, o.created_at, datetime(o.created_at, '+1 year') AS expires_at, u.email AS owner_email
+  FROM offers o
+  JOIN users u ON u.id = o.user_id
+  WHERE o.expiration_notice_sent_at IS NULL
+    AND o.user_id IS NOT NULL
+    AND datetime(o.created_at) <= datetime('now', '-1 year', '+7 days')
+    AND datetime(o.created_at) > datetime('now', '-1 year')
+`);
+const markOfferExpirationNoticeStmt = db.prepare(
+  'UPDATE offers SET expiration_notice_sent_at = ? WHERE id = ?'
+);
+const deleteExpiredOffersStmt = db.prepare(
+  "DELETE FROM offers WHERE datetime(created_at) < datetime('now', '-1 year')"
+);
 const adminUsersStmt = db.prepare(
   'SELECT id, email, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
 );
@@ -362,8 +378,60 @@ const sendContactEmail = async ({ name, email, subject, message }) => {
   await sendEmail({ recipient: CONTACT_EMAIL_TO, subject: formattedSubject, text, html });
 };
 
+const sendOfferExpirationNoticeEmail = async ({ recipient, title, expiresAt }) => {
+  const subject = 'Votre annonce expirera bientôt';
+  const normalizedExpiry = expiresAt
+    ? new Date(`${String(expiresAt).replace(' ', 'T')}Z`)
+    : null;
+  const formattedDate =
+    normalizedExpiry && !Number.isNaN(normalizedExpiry.getTime())
+      ? normalizedExpiry.toLocaleDateString('fr-FR')
+      : 'dans 7 jours';
+  const text = `Bonjour,\n\nVotre annonce "${title}" expirera le ${formattedDate}. Pensez à la renouveler si nécessaire avant sa suppression automatique.\n\nMerci,\nL'équipe Laine Brute`;
+  const html = `
+      <p>Bonjour,</p>
+      <p>Votre annonce <strong>${title}</strong> expirera le <strong>${formattedDate}</strong>.</p>
+      <p>Pensez à la renouveler si nécessaire avant sa suppression automatique.</p>
+      <p>Merci,<br />L'équipe Laine Brute</p>
+    `;
+  return sendEmail({ recipient, subject, text, html });
+};
+
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
 
+const processOfferExpirations = async () => {
+  const noticeCandidates = selectOffersForExpirationNoticeStmt.all();
+  for (const offer of noticeCandidates) {
+    try {
+      await sendOfferExpirationNoticeEmail({
+        recipient: offer.owner_email,
+        title: offer.title,
+        expiresAt: offer.expires_at,
+      });
+      markOfferExpirationNoticeStmt.run(new Date().toISOString(), offer.id);
+    } catch (error) {
+      console.error('Erreur envoi email expiration annonce', error);
+    }
+  }
+
+  const deleted = deleteExpiredOffersStmt.run();
+  if (deleted.changes) {
+    console.log(`Suppression automatique des annonces expirées: ${deleted.changes}`);
+  }
+};
+
+const scheduleOfferExpirationProcessing = () => {
+  const run = async () => {
+    try {
+      await processOfferExpirations();
+    } catch (error) {
+      console.error('Erreur traitement expiration annonces', error);
+    }
+  };
+
+  run();
+  setInterval(run, 1000 * 60 * 60 * 24);
+};
 
 const toOfferPayload = (row) => {
   const producer = row.producer_id
@@ -713,6 +781,22 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.delete('/api/account', authenticateToken, (req, res) => {
+  try {
+    const existing = findUserByIdStmt.get(req.user.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    }
+
+    deleteOffersByUserIdStmt.run(req.user.id);
+    deleteUserByIdStmt.run(req.user.id);
+    return res.json({ data: { success: true } });
+  } catch (error) {
+    console.error('Erreur suppression compte', error);
+    return res.status(500).json({ error: "Impossible de supprimer le compte." });
+  }
+});
+
 app.get('/api/producers', (req, res) => {
   try {
     const producers = listProducersStmt.all().map((producer) => ({
@@ -1029,6 +1113,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
     if (!existing) {
       return res.status(404).json({ error: 'Utilisateur introuvable.' });
     }
+    deleteOffersByUserIdStmt.run(userId);
     deleteUserByIdStmt.run(userId);
     res.json({ data: { success: true } });
   } catch (error) {
@@ -1186,6 +1271,8 @@ app.use((err, req, res, next) => {
   console.error('Erreur inattendue', err);
   res.status(500).json({ error: 'Erreur interne du serveur.' });
 });
+
+scheduleOfferExpirationProcessing();
 
 app.listen(PORT, () => {
   console.log(`API LaineBrute démarrée sur http://localhost:${PORT}`);

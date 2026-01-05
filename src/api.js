@@ -72,6 +72,15 @@ const persistProfiles = (profiles) => {
   storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
 };
 
+const removeProfile = (email) => {
+  if (!email) return;
+  const profiles = getProfiles();
+  if (profiles[email]) {
+    delete profiles[email];
+    persistProfiles(profiles);
+  }
+};
+
 const saveProfile = (email, profile) => {
   if (!email) return null;
   const profiles = getProfiles();
@@ -143,6 +152,7 @@ export const api = {
       body: JSON.stringify({ email, role }),
     }),
   saveProfile: (email, profile) => saveProfile(email, profile),
+  removeProfile,
   getProfile,
   requestPasswordReset: async (email) => {
     if (!email) {
@@ -186,6 +196,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteOffer: (offerId) => request(`/offers/${offerId}`, { method: 'DELETE' }),
+  deleteAccount: () => request('/account', { method: 'DELETE' }),
   getAdminUsers: () => request('/admin/users'),
   updateAdminUser: (userId, body) =>
     request(`/admin/users/${userId}`, {
