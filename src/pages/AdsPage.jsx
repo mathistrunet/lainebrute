@@ -12,12 +12,45 @@ const formatDate = (value) => {
   return date.toLocaleDateString('fr-FR');
 };
 
+const toDateValue = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toRadians = (value) => (value * Math.PI) / 180;
+
+const calculateDistanceKm = (from, to) => {
+  if (!from || !to) return null;
+  const { lat: fromLat, lng: fromLng } = from;
+  const { lat: toLat, lng: toLng } = to;
+  if ([fromLat, fromLng, toLat, toLng].some((coord) => typeof coord !== 'number')) {
+    return null;
+  }
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(deltaLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(earthRadiusKm * c);
+};
+
 function AdsPage() {
   const [ads, setAds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [cityFilter, setCityFilter] = useState('');
+  const [breedFilter, setBreedFilter] = useState('');
+  const [minQuantity, setMinQuantity] = useState('');
+  const [availabilityStart, setAvailabilityStart] = useState('');
+  const [availabilityEnd, setAvailabilityEnd] = useState('');
+  const [distanceMax, setDistanceMax] = useState('');
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle');
+  const [locationError, setLocationError] = useState('');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
 
@@ -49,10 +82,54 @@ function AdsPage() {
     [ads]
   );
 
+  const availableBreeds = useMemo(
+    () => ['', ...new Set(ads.map((ad) => ad.sheep_breed).filter(Boolean))],
+    [ads]
+  );
+
+  const adsWithDistance = useMemo(() => {
+    if (!userLocation) return ads;
+    return ads.map((ad) => {
+      const producerLocation = ad.producer?.lat && ad.producer?.lng
+        ? { lat: ad.producer.lat, lng: ad.producer.lng }
+        : null;
+      const distanceKm = calculateDistanceKm(userLocation, producerLocation);
+      return { ...ad, distanceKm };
+    });
+  }, [ads, userLocation]);
+
   const sortedAndFilteredAds = useMemo(() => {
-    const filtered = ads.filter((ad) => {
-      if (!cityFilter) return true;
-      return ad.city === cityFilter || ad.producer?.city === cityFilter;
+    const minQuantityValue = minQuantity === '' ? null : Number(minQuantity);
+    const minAvailabilityDate = toDateValue(availabilityStart);
+    const maxAvailabilityDate = toDateValue(availabilityEnd);
+    const maxDistanceValue = distanceMax === '' ? null : Number(distanceMax);
+
+    const filtered = adsWithDistance.filter((ad) => {
+      if (cityFilter && !(ad.city === cityFilter || ad.producer?.city === cityFilter)) {
+        return false;
+      }
+      if (breedFilter && ad.sheep_breed !== breedFilter) {
+        return false;
+      }
+      if (minQuantityValue !== null) {
+        const quantity = Number(ad.quantity_kg);
+        if (Number.isNaN(quantity) || quantity < minQuantityValue) {
+          return false;
+        }
+      }
+      const availabilityDate = toDateValue(ad.availability_date);
+      if (minAvailabilityDate && (!availabilityDate || availabilityDate < minAvailabilityDate)) {
+        return false;
+      }
+      if (maxAvailabilityDate && (!availabilityDate || availabilityDate > maxAvailabilityDate)) {
+        return false;
+      }
+      if (maxDistanceValue !== null) {
+        if (!userLocation || typeof ad.distanceKm !== 'number' || ad.distanceKm > maxDistanceValue) {
+          return false;
+        }
+      }
+      return true;
     });
 
     const sorter = sortBy === 'distance'
@@ -60,7 +137,40 @@ function AdsPage() {
       : (a, b) => new Date(b.created_at) - new Date(a.created_at);
 
     return [...filtered].sort(sorter);
-  }, [ads, cityFilter, sortBy]);
+  }, [
+    adsWithDistance,
+    availabilityEnd,
+    availabilityStart,
+    breedFilter,
+    cityFilter,
+    distanceMax,
+    minQuantity,
+    sortBy,
+    userLocation,
+  ]);
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('error');
+      setLocationError('La géolocalisation n’est pas supportée par votre navigateur.');
+      return;
+    }
+    setLocationStatus('loading');
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('success');
+      },
+      (error) => {
+        setLocationStatus('error');
+        setLocationError(error.message || 'Impossible de récupérer votre position.');
+      }
+    );
+  };
 
   const openReportDialog = (ad) => {
     setReportContext({
@@ -99,6 +209,66 @@ function AdsPage() {
             ))}
           </select>
         </label>
+        <label>
+          Race de mouton
+          <select value={breedFilter} onChange={(event) => setBreedFilter(event.target.value)}>
+            {availableBreeds.map((breed) => (
+              <option key={breed || 'all-breeds'} value={breed}>
+                {breed || 'Toutes les races'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Quantité minimale (kg)
+          <input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Ex : 50"
+            value={minQuantity}
+            onChange={(event) => setMinQuantity(event.target.value)}
+          />
+        </label>
+        <label>
+          Date de disponibilité min
+          <input
+            type="date"
+            value={availabilityStart}
+            onChange={(event) => setAvailabilityStart(event.target.value)}
+          />
+        </label>
+        <label>
+          Date de disponibilité max
+          <input
+            type="date"
+            value={availabilityEnd}
+            onChange={(event) => setAvailabilityEnd(event.target.value)}
+          />
+        </label>
+        <label>
+          Distance maximale (km)
+          <input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Ex : 120"
+            value={distanceMax}
+            onChange={(event) => setDistanceMax(event.target.value)}
+          />
+        </label>
+        <div className="filters-bar__location">
+          <button type="button" className="ghost" onClick={requestLocation}>
+            {locationStatus === 'loading' ? 'Localisation en cours...' : 'Utiliser ma position'}
+          </button>
+          {locationStatus === 'success' && userLocation ? (
+            <span className="muted">Position détectée.</span>
+          ) : null}
+          {!userLocation && (sortBy === 'distance' || distanceMax !== '') ? (
+            <span className="muted">Activez la localisation pour trier ou filtrer par distance.</span>
+          ) : null}
+          {locationStatus === 'error' ? <span className="error">{locationError}</span> : null}
+        </div>
       </div>
 
       {isLoading ? (

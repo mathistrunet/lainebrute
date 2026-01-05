@@ -623,6 +623,13 @@ a.ghost {
   font-weight: 600;
 }
 
+.filters-bar__location {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
 .card__content {
   display: grid;
   gap: 0.3rem;
