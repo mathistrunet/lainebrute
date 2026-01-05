@@ -48,8 +48,7 @@ function AdsPage() {
   const [availabilityStart, setAvailabilityStart] = useState('');
   const [availabilityEnd, setAvailabilityEnd] = useState('');
   const [distanceMax, setDistanceMax] = useState('');
-  const [userLocation, setUserLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle');
+  const [referenceCity, setReferenceCity] = useState('');
   const [locationError, setLocationError] = useState('');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
@@ -87,16 +86,49 @@ function AdsPage() {
     [ads]
   );
 
+  const cityLocations = useMemo(() => {
+    const locations = new Map();
+    ads.forEach((ad) => {
+      const city = ad.city || ad.producer?.city;
+      const lat = ad.producer?.lat;
+      const lng = ad.producer?.lng;
+      if (!city || typeof lat !== 'number' || typeof lng !== 'number') {
+        return;
+      }
+      if (!locations.has(city)) {
+        locations.set(city, { lat, lng });
+      }
+    });
+    return locations;
+  }, [ads]);
+
+  const referenceLocation = useMemo(() => {
+    if (!referenceCity) return null;
+    return cityLocations.get(referenceCity.trim()) ?? null;
+  }, [cityLocations, referenceCity]);
+
+  useEffect(() => {
+    if (!referenceCity) {
+      setLocationError('');
+      return;
+    }
+    if (!referenceLocation) {
+      setLocationError('Ville inconnue ou sans coordonnées associées.');
+      return;
+    }
+    setLocationError('');
+  }, [referenceCity, referenceLocation]);
+
   const adsWithDistance = useMemo(() => {
-    if (!userLocation) return ads;
+    if (!referenceLocation) return ads;
     return ads.map((ad) => {
       const producerLocation = ad.producer?.lat && ad.producer?.lng
         ? { lat: ad.producer.lat, lng: ad.producer.lng }
         : null;
-      const distanceKm = calculateDistanceKm(userLocation, producerLocation);
+      const distanceKm = calculateDistanceKm(referenceLocation, producerLocation);
       return { ...ad, distanceKm };
     });
-  }, [ads, userLocation]);
+  }, [ads, referenceLocation]);
 
   const sortedAndFilteredAds = useMemo(() => {
     const minQuantityValue = minQuantity === '' ? null : Number(minQuantity);
@@ -125,7 +157,7 @@ function AdsPage() {
         return false;
       }
       if (maxDistanceValue !== null) {
-        if (!userLocation || typeof ad.distanceKm !== 'number' || ad.distanceKm > maxDistanceValue) {
+        if (!referenceLocation || typeof ad.distanceKm !== 'number' || ad.distanceKm > maxDistanceValue) {
           return false;
         }
       }
@@ -146,31 +178,8 @@ function AdsPage() {
     distanceMax,
     minQuantity,
     sortBy,
-    userLocation,
+    referenceLocation,
   ]);
-
-  const requestLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus('error');
-      setLocationError('La géolocalisation n’est pas supportée par votre navigateur.');
-      return;
-    }
-    setLocationStatus('loading');
-    setLocationError('');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setLocationStatus('success');
-      },
-      (error) => {
-        setLocationStatus('error');
-        setLocationError(error.message || 'Impossible de récupérer votre position.');
-      }
-    );
-  };
 
   const openReportDialog = (ad) => {
     setReportContext({
@@ -258,16 +267,26 @@ function AdsPage() {
           />
         </label>
         <div className="filters-bar__location">
-          <button type="button" className="ghost" onClick={requestLocation}>
-            {locationStatus === 'loading' ? 'Localisation en cours...' : 'Utiliser ma position'}
-          </button>
-          {locationStatus === 'success' && userLocation ? (
-            <span className="muted">Position détectée.</span>
+          <label htmlFor="reference-city">
+            Ville pour le calcul de distance
+            <input
+              id="reference-city"
+              type="text"
+              placeholder="Ex : Toulouse"
+              value={referenceCity}
+              onChange={(event) => setReferenceCity(event.target.value)}
+              list="reference-cities"
+            />
+          </label>
+          <datalist id="reference-cities">
+            {availableCities.filter(Boolean).map((city) => (
+              <option key={city} value={city} />
+            ))}
+          </datalist>
+          {!referenceLocation && (sortBy === 'distance' || distanceMax !== '') ? (
+            <span className="muted">Renseignez une ville pour trier ou filtrer par distance.</span>
           ) : null}
-          {!userLocation && (sortBy === 'distance' || distanceMax !== '') ? (
-            <span className="muted">Activez la localisation pour trier ou filtrer par distance.</span>
-          ) : null}
-          {locationStatus === 'error' ? <span className="error">{locationError}</span> : null}
+          {locationError ? <span className="error">{locationError}</span> : null}
         </div>
       </div>
 
