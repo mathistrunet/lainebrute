@@ -1236,12 +1236,17 @@ app.get('/api/admin/offers', authenticateToken, requireAdmin, (req, res) => {
 
 app.get('/api/admin/database', authenticateToken, requireAdmin, (req, res) => {
   try {
+    const parsedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit >= 0 ? Math.min(parsedLimit, 1000) : 200;
+
     const tables = listTablesStmt.all().map(({ name }) => {
       const safeName = escapeIdentifier(name);
       const columnsInfo = db.prepare(`PRAGMA table_info("${safeName}")`).all();
       const columns = columnsInfo.map((column) => column.name);
-      const rows = db.prepare(`SELECT * FROM "${safeName}"`).all();
-      return { name, columns, rows };
+      const rowCount = db.prepare(`SELECT COUNT(*) AS count FROM "${safeName}"`).get().count;
+      const rows =
+        limit === 0 ? [] : db.prepare(`SELECT * FROM "${safeName}" LIMIT ?`).all(limit);
+      return { name, columns, rows, rowCount, truncated: limit > 0 && rowCount > rows.length };
     });
     res.json({ data: tables });
   } catch (error) {
