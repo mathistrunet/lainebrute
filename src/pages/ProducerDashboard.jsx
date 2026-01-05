@@ -130,6 +130,8 @@ function ProducerDashboard() {
   const [profileStatus, setProfileStatus] = useState('idle');
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
+  const [accountStatus, setAccountStatus] = useState('idle');
+  const [accountError, setAccountError] = useState('');
   const [ads, setAds] = useState([]);
   const [adsStatus, setAdsStatus] = useState('idle');
   const [adsError, setAdsError] = useState('');
@@ -393,10 +395,29 @@ function ProducerDashboard() {
     setIsEditingProfile(false);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return;
+    const warningMessage =
+      'Attention : la suppression du compte est irréversible. Toutes vos informations et annonces seront supprimées. Confirmez-vous la suppression ?';
+    const confirmed = window.confirm(warningMessage);
+    if (!confirmed) return;
+    setAccountStatus('loading');
+    setAccountError('');
+    try {
+      await api.deleteAccount();
+      api.logout();
+      window.location.assign('/');
+    } catch (error) {
+      setAccountError(error?.message ?? "Impossible de supprimer le compte.");
+    } finally {
+      setAccountStatus('idle');
+    }
+  };
+
   if (isAdmin) {
     return (
       <section className="producer-dashboard">
-        <h1>Espace producteur</h1>
+        <h1>Mon profil</h1>
         <p>Accédez aux espaces producteurs pour suivre leurs informations et leurs annonces.</p>
 
         <section className="card">
@@ -450,8 +471,8 @@ function ProducerDashboard() {
   if (!currentUser) {
     return (
       <section className="producer-dashboard">
-        <h1>Espace producteur</h1>
-        <p className="error">Connectez-vous pour accéder à votre espace producteur.</p>
+        <h1>Mon profil</h1>
+        <p className="error">Connectez-vous pour accéder à votre profil.</p>
         <Link to="/annonces" className="ghost">
           Retour aux annonces
         </Link>
@@ -462,19 +483,52 @@ function ProducerDashboard() {
   if (currentUser.role !== 'producer') {
     return (
       <section className="producer-dashboard">
-        <h1>Espace producteur</h1>
-        <p className="error">Cet espace est réservé aux producteurs enregistrés.</p>
-        <Link to="/annonces" className="ghost">
-          Retour aux annonces
-        </Link>
+        <h1>Mon profil</h1>
+        <p>Retrouvez ici vos informations de compte.</p>
+        <div className="grid-2-cols">
+          <div className="card">
+            <h2>Compte</h2>
+            <dl className="description-list">
+              <div>
+                <dt>Email</dt>
+                <dd>{currentUser.email}</dd>
+              </div>
+              <div>
+                <dt>Rôle</dt>
+                <dd>{currentUser.role}</dd>
+              </div>
+            </dl>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={handleDeleteAccount}
+                disabled={accountStatus === 'loading'}
+              >
+                {accountStatus === 'loading' ? 'Suppression...' : 'Supprimer mon compte'}
+              </button>
+            </div>
+            {accountError && <p className="error">{accountError}</p>}
+          </div>
+          <div className="card">
+            <h2>Accès producteur</h2>
+            <p className="muted">
+              Les producteurs disposent d&apos;options supplémentaires pour publier des annonces et gérer leur
+              page publique.
+            </p>
+            <Link to="/contact" className="ghost">
+              Contacter l&apos;équipe
+            </Link>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="producer-dashboard">
-      <h1>Espace producteur</h1>
-      <p>Gérez vos informations publiques et vos annonces produits.</p>
+      <h1>Mon profil</h1>
+      <p>Gérez vos informations publiques, vos annonces produits et vos coordonnées de compte.</p>
 
       <div className="grid-2-cols">
         <div className={isEditingProfile ? 'form-card' : 'card'}>
@@ -647,6 +701,31 @@ function ProducerDashboard() {
           </dl>
         </div>
       </div>
+
+      <section className="card">
+        <h2>Compte</h2>
+        <dl className="description-list">
+          <div>
+            <dt>Email</dt>
+            <dd>{currentUser.email}</dd>
+          </div>
+          <div>
+            <dt>Rôle</dt>
+            <dd>{currentUser.role}</dd>
+          </div>
+        </dl>
+        <div className="form-actions">
+          <button
+            type="button"
+            className="ghost"
+            onClick={handleDeleteAccount}
+            disabled={accountStatus === 'loading'}
+          >
+            {accountStatus === 'loading' ? 'Suppression...' : 'Supprimer mon compte'}
+          </button>
+        </div>
+        {accountError && <p className="error">{accountError}</p>}
+      </section>
 
       <section className="ads-manager">
         <header className="section-header">

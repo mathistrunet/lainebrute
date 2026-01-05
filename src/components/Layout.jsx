@@ -22,13 +22,13 @@ function Layout() {
       return commonLinks;
     }
 
+    commonLinks.push({ to: '/producteur', label: 'Mon profil' });
+
     if (user.role === 'producer') {
-      commonLinks.push({ to: '/producteur', label: 'Espace producteur' });
       commonLinks.push({ to: '/producteur/ma-page', label: 'Ma page producteur' });
     }
 
     if (user.role === 'admin') {
-      commonLinks.push({ to: '/producteur', label: 'Espace producteur' });
       commonLinks.push({ to: '/admin', label: 'Admin' });
     }
 
@@ -41,14 +41,17 @@ function Layout() {
     setIsIdentityPanelOpen(true);
   };
 
-  const displayName = user?.profile?.firstName || user?.profile?.lastName
-    ? `${user?.profile?.firstName ?? ''} ${user?.profile?.lastName ?? ''}`.trim()
-    : user?.email;
+  const displayName = user?.email;
 
   const handleLogout = () => {
     api.logout();
     setUser(null);
     setIsAccountMenuOpen(false);
+  };
+
+  const handleProfileClick = () => {
+    setIsAccountMenuOpen(false);
+    navigate('/producteur');
   };
 
   const handleBrandClick = () => {
@@ -98,8 +101,8 @@ function Layout() {
               </button>
               {isAccountMenuOpen && (
                 <div className="account-menu__dropdown">
-                  <button type="button" onClick={() => openIdentity('profile')}>
-                    Modifier le profil
+                  <button type="button" onClick={handleProfileClick}>
+                    Mon profil
                   </button>
                   <button type="button" onClick={handleLogout}>
                     Déconnexion
