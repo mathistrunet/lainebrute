@@ -79,6 +79,7 @@ export class SimpleMap {
     this.renderFrame = null;
     this.pendingFit = null;
     this.onMarkerSelect = null;
+    this.wheelAccumulator = 0;
 
     this.root = document.createElement('div');
     this.root.className = 'tile-map';
@@ -340,6 +341,7 @@ export class SimpleMap {
         entryNode.labelEl.textContent = `${cluster.count} producteurs`;
         entryNode.buttonEl.textContent = String(cluster.count);
         entryNode.buttonEl.classList.add('tile-map__marker--cluster');
+        entryNode.buttonEl.classList.remove('tile-map__marker--has-ads');
         entryNode.buttonEl.classList.remove('is-active');
         entryNode.buttonEl.setAttribute('aria-label', `${cluster.count} producteurs regroupés`);
         entryNode.buttonEl.title = `${cluster.count} producteurs regroupés`;
@@ -357,6 +359,7 @@ export class SimpleMap {
       } else {
         entryNode.el.classList.remove('tile-map__marker-wrapper--cluster');
         entryNode.buttonEl.classList.remove('tile-map__marker--cluster');
+        entryNode.buttonEl.classList.toggle('tile-map__marker--has-ads', Boolean(cluster.marker.hasAds));
         entryNode.buttonEl.textContent = '';
         const markerName = cluster.marker.name ?? cluster.marker.title ?? 'Producteur';
         entryNode.labelEl.textContent = markerName;
@@ -546,8 +549,14 @@ export class SimpleMap {
 
   handleWheel(event) {
     event.preventDefault();
-    const direction = event.deltaY > 0 ? -1 : 1;
-    const nextZoom = this.clampZoom(this.zoom + direction);
+    this.wheelAccumulator += event.deltaY;
+    const threshold = 120;
+    if (Math.abs(this.wheelAccumulator) < threshold) {
+      return;
+    }
+    const steps = Math.trunc(this.wheelAccumulator / threshold);
+    this.wheelAccumulator -= steps * threshold;
+    const nextZoom = this.clampZoom(this.zoom - steps);
     if (nextZoom === this.zoom) {
       return;
     }
