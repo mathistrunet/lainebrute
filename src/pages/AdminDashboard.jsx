@@ -100,7 +100,7 @@ function AdminDashboard() {
   const loadDatabase = async () => {
     setDatabaseStatus({ state: 'loading', error: null });
     try {
-      const data = await api.getAdminDatabase();
+      const data = await api.getAdminDatabase({ limit: 200 });
       setDatabaseTables(data ?? []);
       setDatabaseStatus({ state: 'success', error: null });
     } catch (error) {
@@ -814,7 +814,10 @@ function AdminDashboard() {
           <div key={table.name} className="card admin-card">
             <div className="admin-card__header">
               <h2>{table.name}</h2>
-              <p className="muted">{table.rows.length} lignes</p>
+              <p className="muted">
+                {table.rowCount ?? table.rows.length} lignes
+                {table.truncated ? ' (extrait affiché)' : ''}
+              </p>
             </div>
             <div className="admin-table__wrapper">
               <table className="admin-table">

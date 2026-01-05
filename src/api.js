@@ -213,7 +213,14 @@ export const api = {
   deleteAdminProducer: (producerId) =>
     request(`/admin/producers/${producerId}`, { method: 'DELETE' }),
   getAdminOffers: () => request('/admin/offers'),
-  getAdminDatabase: () => request('/admin/database'),
+  getAdminDatabase: (options = {}) => {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) {
+      params.set('limit', String(options.limit));
+    }
+    const suffix = params.toString();
+    return request(`/admin/database${suffix ? `?${suffix}` : ''}`);
+  },
   getAdminTraffic: () => request('/admin/traffic'),
   sendReport: (body) =>
     request('/reports', {
