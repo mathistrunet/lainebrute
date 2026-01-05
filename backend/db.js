@@ -106,90 +106,11 @@ const seedDatabase = () => {
     return;
   }
 
-  const buyerPasswordHash = bcrypt.hashSync('mathtrunet100', 10);
-  const producerPasswordHash = bcrypt.hashSync('mathtrunet101', 10);
   const adminPasswordHash = bcrypt.hashSync('mathtrunet102', 10);
   const insertVerifiedUser = db.prepare(
     'INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, 1)'
   );
-  const buyerUserId = insertVerifiedUser
-    .run('mathtrunet100@gmail.com', buyerPasswordHash, 'buyer')
-    .lastInsertRowid;
-  const producerUserId = insertVerifiedUser
-    .run('mathtrunet101@gmail.com', producerPasswordHash, 'producer')
-    .lastInsertRowid;
   insertVerifiedUser.run('mathtrunet102@gmail.com', adminPasswordHash, 'admin');
-
-  const insertProducer = db.prepare(`
-    INSERT INTO producers (
-      user_id,
-      name,
-      city,
-      description,
-      lat,
-      lng,
-      first_name,
-      last_name,
-      phone,
-      siret,
-      show_identity,
-      show_phone,
-      show_siret
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const fermeNordId = insertProducer.run(
-    producerUserId,
-    'Ferme du Nord',
-    'Lille',
-    'Production de pommes et pommes de terre en circuit court.',
-    50.6292,
-    3.0573,
-    'Claire',
-    'Dupont',
-    '+33 3 20 00 00 00',
-    '12345678900017',
-    1,
-    1,
-    0
-  ).lastInsertRowid;
-
-  const insertOffer = db.prepare(
-    `INSERT INTO offers (
-      producer_id,
-      user_id,
-      title,
-      availability_date,
-      quantity_kg,
-      delivery_radius_km,
-      sheep_breed,
-      description,
-      city
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  insertOffer.run(
-    fermeNordId,
-    producerUserId,
-    'Tomates bio en cagettes',
-    '2024-09-01',
-    100,
-    30,
-    'Lacaune',
-    'Cagettes de 10 kg de tomates plein champ disponibles chaque semaine.',
-    'Lille'
-  );
-  insertOffer.run(
-    null,
-    buyerUserId,
-    'Recherche lots de laine brute',
-    '2024-10-15',
-    250,
-    50,
-    'Texel',
-    'Acheteur intéressé par des lots réguliers pour transformation.',
-    'Grenoble'
-  );
 };
 
 const ensureOfferOwners = () => {
