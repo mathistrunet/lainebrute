@@ -10,7 +10,6 @@ const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""
 const getTableColumns = (table) =>
   db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all();
 
-
 const ensureColumn = (table, column, definition) => {
   const columns = getTableColumns(table);
   const columnNames = columns.map((info) => info.name);
@@ -32,6 +31,8 @@ const ensureColumn = (table, column, definition) => {
 db.pragma('foreign_keys = ON');
 
 const createTables = () => {
+  resetDatabaseIfInvalidSchema();
+
   db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
