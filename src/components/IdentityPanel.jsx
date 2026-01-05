@@ -25,6 +25,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const [deleteError, setDeleteError] = useState('');
   const [emailDelivery, setEmailDelivery] = useState(null);
 
+  const isProfileMode = mode === 'profile';
   const isProducer = role === 'producer';
 
   useEffect(() => {
@@ -128,6 +129,37 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
     }
   };
 
+  const handleProfileSave = (event) => {
+    event.preventDefault();
+    if (!user) {
+      setError("Impossible de modifier un profil sans compte connecté.");
+      return;
+    }
+    setStatus('loading');
+    setError('');
+    setMessage('');
+    setEmailDelivery(null);
+
+    if (isProducer && !companyName.trim()) {
+      setStatus('idle');
+      setError("Merci de renseigner le nom de l'entreprise.");
+      return;
+    }
+
+    const updatedProfile = updateUserProfile(user, {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phone: phone.trim(),
+      role,
+      companyName: companyName.trim(),
+      siret: siret.trim(),
+    });
+
+    onUserChange?.({ ...user, role, profile: updatedProfile });
+    setStatus('idle');
+    setMessage('Profil mis à jour.');
+  };
+
   const handleForgotPassword = async (event) => {
     event.preventDefault();
     setStatus('loading');
@@ -190,9 +222,11 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
   const showForgot = mode === 'forgot';
   const formTitle = showForgot
     ? 'Mot de passe oublié'
-    : mode === 'register'
-      ? 'Créez votre compte'
-      : 'Accédez à vos espaces';
+    : isProfileMode
+      ? 'Modifier vos informations'
+      : mode === 'register'
+        ? 'Créez votre compte'
+        : 'Accédez à vos espaces';
   const emailDeliveryMessage = formatEmailDelivery(emailDelivery);
   const emailDeliveryHasError = emailDeliveryMessage && !emailDelivery?.sent;
 
@@ -209,7 +243,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
           </p>
         </div>
         <div className="identity-panel__controls">
-          {!showForgot && (
+          {!showForgot && !isProfileMode && (
             <div className="identity-panel__switch">
               {tabs.map((tab) => (
                 <button
@@ -319,7 +353,10 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
       )}
 
       {(mode === 'register' || mode === 'profile') && (
-        <form className="identity-panel__card identity-panel__form" onSubmit={handleRegister}>
+        <form
+          className="identity-panel__card identity-panel__form"
+          onSubmit={isProfileMode ? handleProfileSave : handleRegister}
+        >
           <div className="identity-grid">
             <label>
               Nom
@@ -397,6 +434,7 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
                 autoComplete="email"
                 required
                 placeholder="vous@example.fr"
+                disabled={isProfileMode}
               />
             </label>
           </div>
@@ -405,9 +443,16 @@ function IdentityPanel({ user, onUserChange, onClose, defaultMode = 'login' }) {
             <button type="submit" disabled={status === 'loading'}>
               {status === 'loading' ? 'En cours...' : 'Enregistrer'}
             </button>
-            <small className="muted">
-              Vous recevrez un email pour créer votre mot de passe et finaliser la connexion.
-            </small>
+            {!isProfileMode && (
+              <small className="muted">
+                Vous recevrez un email pour créer votre mot de passe et finaliser la connexion.
+              </small>
+            )}
+            {isProfileMode && (
+              <small className="muted">
+                L&apos;adresse email de connexion ne peut pas être modifiée depuis cet écran.
+              </small>
+            )}
           </div>
           {error && <p className="error">{error}</p>}
           {emailDeliveryMessage && (
