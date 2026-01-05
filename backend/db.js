@@ -10,29 +10,6 @@ const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""
 const getTableColumns = (table) =>
   db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all();
 
-const resetDatabaseIfInvalidSchema = () => {
-  const columns = getTableColumns('producers');
-  const hasUnexpectedTextColumn = columns.some((info) => info.name === 'TEXT');
-
-  if (!hasUnexpectedTextColumn) {
-    return false;
-  }
-
-  console.warn(
-    'Unexpected column named "TEXT" detected in producers table. Resetting database to rebuild schema.'
-  );
-
-  db.transaction(() => {
-    db.pragma('foreign_keys = OFF');
-    db.prepare('DROP TABLE IF EXISTS offers').run();
-    db.prepare('DROP TABLE IF EXISTS producers').run();
-    db.prepare('DROP TABLE IF EXISTS users').run();
-    db.pragma('foreign_keys = ON');
-  })();
-
-  return true;
-};
-
 const ensureColumn = (table, column, definition) => {
   const columns = getTableColumns(table);
   const columnNames = columns.map((info) => info.name);
