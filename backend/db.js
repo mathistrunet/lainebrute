@@ -10,6 +10,72 @@ const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""
 const getTableColumns = (table) =>
   db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all();
 
+const expectedProducersColumns = [
+  'id',
+  'user_id',
+  'name',
+  'city',
+  'description',
+  'lat',
+  'lng',
+  'first_name',
+  'last_name',
+  'phone',
+  'siret',
+  'show_identity',
+  'show_phone',
+  'show_siret',
+  'created_at',
+];
+
+const migrateProducersTableIfNeeded = () => {
+  const columns = getTableColumns('producers');
+  const columnNames = columns.map((info) => info.name);
+
+  if (!columnNames.includes('TEXT')) {
+    return;
+  }
+
+  const tempTable = 'producers_new';
+  const copyColumns = expectedProducersColumns.filter((name) => columnNames.includes(name));
+  const columnList = copyColumns.map(quoteIdentifier).join(', ');
+
+  db.transaction(() => {
+    db.prepare(`DROP TABLE IF EXISTS ${quoteIdentifier(tempTable)}`).run();
+    db.prepare(`
+      CREATE TABLE ${quoteIdentifier(tempTable)} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        city TEXT,
+        description TEXT,
+        lat REAL,
+        lng REAL,
+        first_name TEXT,
+        last_name TEXT,
+        phone TEXT,
+        siret TEXT,
+        show_identity INTEGER NOT NULL DEFAULT 0,
+        show_phone INTEGER NOT NULL DEFAULT 0,
+        show_siret INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `).run();
+
+    if (copyColumns.length > 0) {
+      db.prepare(`
+        INSERT INTO ${quoteIdentifier(tempTable)} (${columnList})
+        SELECT ${columnList} FROM ${quoteIdentifier('producers')}
+      `).run();
+    }
+
+    db.prepare(`DROP TABLE ${quoteIdentifier('producers')}`).run();
+    db.prepare(`ALTER TABLE ${quoteIdentifier(tempTable)} RENAME TO ${quoteIdentifier('producers')}`)
+      .run();
+  })();
+};
+
 const ensureColumn = (table, column, definition) => {
   const columns = getTableColumns(table);
   const columnNames = columns.map((info) => info.name);
@@ -65,6 +131,8 @@ const createTables = () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `).run();
+
+  migrateProducersTableIfNeeded();
 
   ensureColumn('producers', 'first_name', 'TEXT');
   ensureColumn('producers', 'last_name', 'TEXT');
