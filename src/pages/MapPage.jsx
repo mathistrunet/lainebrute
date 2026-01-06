@@ -65,7 +65,8 @@ function MapPage() {
   const [error, setError] = useState('');
   const [activeProducerId, setActiveProducerId] = useState(null);
   const [highlightedProducerId, setHighlightedProducerId] = useState(null);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState(true);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [userLocation, setUserLocation] = useState(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -199,7 +200,7 @@ function MapPage() {
     (producer) => {
       if (!producer || !mapRef.current) return;
       setActiveProducerId(producer.id);
-      setIsPanelOpen(true);
+      setIsDetailOpen(true);
       triggerHighlight(producer.id);
       mapRef.current.flyTo([producer.lat, producer.lng], 9);
     },
@@ -292,16 +293,19 @@ function MapPage() {
     mapRef.current.fitBounds(bounds, { padding: 80 });
   };
 
+  const activeProducer = useMemo(
+    () => markers.find((producer) => producer.id === activeProducerId),
+    [markers, activeProducerId]
+  );
+
   return (
     <section className="map-page">
       <div className="map-page__header">
-        <div>
-          <h1>Carte interactive des producteurs</h1>
-          <p>
-            Visualisez les producteurs de laine brute partout en France, explorez leurs lots et
-            localisez vos partenaires en un clic.
-          </p>
-        </div>
+        <h1>Carte interactive des producteurs</h1>
+        <p>
+          Visualisez les producteurs de laine brute partout en France, explorez leurs lots et
+          localisez vos partenaires en un clic.
+        </p>
         <div className="map-page__search">
           <CityAutocomplete
             value={searchValue}
@@ -313,34 +317,78 @@ function MapPage() {
       </div>
 
       <div className="map-shell">
-        <div className="map-shell__toolbar">
-          <div>
-            <p className="eyebrow">Navigation</p>
-            <p className="muted">
-              Glissez pour vous déplacer, utilisez la molette pour zoomer et survolez un point pour
-              afficher les détails d&apos;un producteur.
-            </p>
-          </div>
-          <div className="map-shell__actions">
-            <button type="button" className="ghost" onClick={handleUserRecenter}>
-              Recentrer sur ma position
-            </button>
-            <button type="button" className="ghost" onClick={handleShowAll}>
-              Afficher tous les producteurs
-            </button>
-          </div>
-        </div>
-
         <div className="map-layout">
+          <aside
+            id="navigation-panel"
+            className={`map-nav-panel ${isNavOpen ? 'is-open' : ''}`}
+          >
+            <div className="map-nav-panel__header">
+              <div>
+                <p className="eyebrow">Navigation</p>
+                <h2>Se déplacer sur la carte</h2>
+                <p className="muted">
+                  Glissez pour vous déplacer, utilisez la molette pour zoomer et survolez un point
+                  pour afficher les détails d&apos;un producteur.
+                </p>
+              </div>
+              <button type="button" className="ghost" onClick={() => setIsNavOpen(false)}>
+                Fermer
+              </button>
+            </div>
+            <div className="map-shell__actions">
+              <button type="button" className="ghost" onClick={handleUserRecenter}>
+                Recentrer sur ma position
+              </button>
+              <button type="button" className="ghost" onClick={handleShowAll}>
+                Afficher tous les producteurs
+              </button>
+            </div>
+            <div className="map-nav-panel__list">
+              <p className="eyebrow">Producteurs</p>
+              <ul className="card-list card-list--compact">
+                {markers.map((producer) => (
+                  <li
+                    key={producer.id}
+                    ref={registerItemRef(producer.id)}
+                    className={`card card--compact ${
+                      producer.id === activeProducerId ? 'is-active' : ''
+                    } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="card__link"
+                      onClick={() => handleLocate(producer)}
+                    >
+                      <div>
+                        <strong>{producer.name}</strong>
+                        {producer.city && <p className="muted">{producer.city}</p>}
+                      </div>
+                      <span className="card__chevron">Voir</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+
           <div ref={mapContainerRef} className="map-canvas" aria-label="Carte des producteurs" />
           <button
             type="button"
-            className="map-panel-toggle"
-            onClick={() => setIsPanelOpen((open) => !open)}
-            aria-expanded={isPanelOpen}
+            className="map-panel-toggle map-panel-toggle--left"
+            onClick={() => setIsNavOpen((open) => !open)}
+            aria-expanded={isNavOpen}
+            aria-controls="navigation-panel"
+          >
+            {isNavOpen ? 'Masquer la navigation' : 'Navigation'}
+          </button>
+          <button
+            type="button"
+            className="map-panel-toggle map-panel-toggle--right"
+            onClick={() => setIsDetailOpen((open) => !open)}
+            aria-expanded={isDetailOpen}
             aria-controls="producer-panel"
           >
-            {isPanelOpen ? 'Masquer la liste' : 'Voir la liste des producteurs'}
+            {isDetailOpen ? 'Masquer la fiche' : 'Fiche producteur'}
           </button>
           <div className="map-legend">
             <p className="eyebrow">Statut des producteurs</p>
@@ -353,54 +401,55 @@ function MapPage() {
           </div>
           <aside
             id="producer-panel"
-            className={`map-side-panel ${isPanelOpen ? 'is-open' : ''}`}
-            aria-label="Liste des producteurs"
+            className={`map-detail-panel ${isDetailOpen ? 'is-open' : ''}`}
+            aria-label="Fiche producteur"
           >
-            <div className="map-side-panel__header">
+            <div className="map-detail-panel__header">
               <div>
-                <p className="eyebrow">Producteurs référencés</p>
-                <h2>Liste des producteurs</h2>
+                <p className="eyebrow">Fiche producteur</p>
+                <h2>Détails du producteur</h2>
                 <p className="muted">
-                  Cliquez sur un point de la carte pour ouvrir le détail du producteur et le
-                  sélectionner dans la liste.
+                  Sélectionnez un point sur la carte pour afficher sa fiche de présentation.
                 </p>
               </div>
-              <button type="button" className="ghost" onClick={() => setIsPanelOpen(false)}>
+              <button type="button" className="ghost" onClick={() => setIsDetailOpen(false)}>
                 Fermer
               </button>
             </div>
-            <ul className="card-list map-side-panel__list">
-              {markers.map((producer) => (
-                <li
-                  key={producer.id}
-                  ref={registerItemRef(producer.id)}
-                  className={`card ${
-                    producer.id === activeProducerId ? 'is-active' : ''
-                  } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
+            {activeProducer ? (
+              <div className="producer-detail-card">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => openReportDialog(activeProducer)}
+                  aria-label={`Signaler ${activeProducer.name}`}
+                  title="Signaler"
                 >
-                  <div>
-                    <strong>{producer.name}</strong>
-                    {producer.city && <p className="muted">{producer.city}</p>}
-                    {producer.quantity && <p>{producer.quantity}</p>}
-                  </div>
-                  <div className="card__actions">
-                    <button type="button" className="ghost" onClick={() => handleLocate(producer)}>
-                      Localiser
-                    </button>
-                    <button type="button" className="ghost" onClick={() => openReportDialog(producer)}>
-                      Signaler
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => openReportDialog(producer, 'claim')}
-                    >
-                      Revendiquer
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  ⚑
+                </button>
+                <p className="eyebrow">Producteur</p>
+                <h3>{activeProducer.name}</h3>
+                {activeProducer.city && <p className="muted">{activeProducer.city}</p>}
+                {activeProducer.quantity && <p>{activeProducer.quantity}</p>}
+                <div className="producer-detail-card__badges">
+                  <span className="badge">
+                    {activeProducer.hasAds ? 'Annonces disponibles' : 'Sans annonce'}
+                  </span>
+                  {activeProducer.status && <span className="badge">{activeProducer.status}</span>}
+                </div>
+                <div className="producer-detail-card__actions">
+                  <button type="button" className="ghost" onClick={() => handleLocate(activeProducer)}>
+                    Recentrer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="producer-detail-card producer-detail-card--empty">
+                <p className="muted">
+                  Cliquez sur un producteur pour afficher ses informations.
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       </div>
