@@ -180,6 +180,9 @@ const selectOfferWithOwnerStmt = db.prepare(`
   LEFT JOIN producers p ON o.producer_id = p.id
   WHERE o.id = ?
 `);
+const countOffersByProducerIdStmt = db.prepare(
+  'SELECT COUNT(*) AS count FROM offers WHERE producer_id = ?'
+);
 const deleteOfferStmt = db.prepare('DELETE FROM offers WHERE id = ?');
 const selectOffersForExpirationNoticeStmt = db.prepare(`
   SELECT o.id, o.title, o.created_at, datetime(o.created_at, '+1 year') AS expires_at, u.email AS owner_email
@@ -1043,6 +1046,12 @@ app.post('/api/offers', authenticateToken, requirePublisher, (req, res) => {
           .json({ error: 'Veuillez créer votre profil producteur avant de publier une offre.' });
       }
       producerId = producer.id;
+      const existingOffers = countOffersByProducerIdStmt.get(producerId)?.count ?? 0;
+      if (existingOffers >= 10) {
+        return res
+          .status(400)
+          .json({ error: 'Limite atteinte : un producteur ne peut publier que 10 annonces.' });
+      }
     }
 
     const result = insertOfferStmt.run(

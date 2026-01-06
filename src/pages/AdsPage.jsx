@@ -38,6 +38,7 @@ const calculateDistanceKm = (from, to) => {
 };
 
 function AdsPage() {
+  const adsPerPage = 30;
   const [ads, setAds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -52,6 +53,7 @@ function AdsPage() {
   const [locationError, setLocationError] = useState('');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(adsPerPage);
 
   useEffect(() => {
     let isMounted = true;
@@ -181,6 +183,27 @@ function AdsPage() {
     referenceLocation,
   ]);
 
+  useEffect(() => {
+    setVisibleCount(adsPerPage);
+  }, [
+    adsPerPage,
+    ads.length,
+    availabilityEnd,
+    availabilityStart,
+    breedFilter,
+    cityFilter,
+    distanceMax,
+    minQuantity,
+    referenceCity,
+    sortBy,
+  ]);
+
+  const filteredCount = sortedAndFilteredAds.length;
+  const visibleAds = useMemo(
+    () => sortedAndFilteredAds.slice(0, visibleCount),
+    [sortedAndFilteredAds, visibleCount]
+  );
+
   const openReportDialog = (ad) => {
     setReportContext({
       type: 'ad',
@@ -295,44 +318,60 @@ function AdsPage() {
       ) : errorMessage ? (
         <p className="error">{errorMessage}</p>
       ) : (
-        <ul className="card-list">
-          {sortedAndFilteredAds.map((ad) => (
-            <li key={ad.id} className="card">
-              <div className="eyebrow">Annonce producteur</div>
-              <h2>{ad.title}</h2>
-              <p>{ad.description || 'Pas de description fournie.'}</p>
-              <p>Disponibilité : {formatDate(ad.availability_date)}</p>
-              <p>
-                Quantité :{' '}
-                {ad.quantity_kg !== null && ad.quantity_kg !== undefined
-                  ? `${ad.quantity_kg} kg`
-                  : 'Non renseignée'}
-              </p>
-              <p>
-                Zone de livraison :{' '}
-                {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
-                  ? `${ad.delivery_radius_km} km`
-                  : 'Non renseignée'}
-              </p>
-              <p>Race : {ad.sheep_breed || 'Non renseignée'}</p>
-              <p>Publié le : {formatDate(ad.created_at)}</p>
-              <p>
-                Producteur : {ad.producer?.name ?? 'Producteur'} — {ad.producer?.city ?? ad.city ?? 'Ville inconnue'}
-                {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
-              </p>
-              <div className="card__actions">
-                <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
-                  Signaler
-                </button>
-              </div>
-              {ad.producer?.id ? (
-                <Link to={`/producteurs/${ad.producer.id}`} className="ghost">
-                  Voir la page du producteur
-                </Link>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="muted">
+            {filteredCount} annonce{filteredCount > 1 ? 's' : ''} correspond{filteredCount > 1 ? 'ent' : ''} à votre
+            recherche.
+          </p>
+          <ul className="card-list">
+            {visibleAds.map((ad) => (
+              <li key={ad.id} className="card">
+                <div className="eyebrow">Annonce producteur</div>
+                <h2>{ad.title}</h2>
+                <p>{ad.description || 'Pas de description fournie.'}</p>
+                <p>Disponibilité : {formatDate(ad.availability_date)}</p>
+                <p>
+                  Quantité :{' '}
+                  {ad.quantity_kg !== null && ad.quantity_kg !== undefined
+                    ? `${ad.quantity_kg} kg`
+                    : 'Non renseignée'}
+                </p>
+                <p>
+                  Zone de livraison :{' '}
+                  {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
+                    ? `${ad.delivery_radius_km} km`
+                    : 'Non renseignée'}
+                </p>
+                <p>Race : {ad.sheep_breed || 'Non renseignée'}</p>
+                <p>Publié le : {formatDate(ad.created_at)}</p>
+                <p>
+                  Producteur : {ad.producer?.name ?? 'Producteur'} —{' '}
+                  {ad.producer?.city ?? ad.city ?? 'Ville inconnue'}
+                  {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
+                </p>
+                <div className="card__actions">
+                  <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
+                    Signaler
+                  </button>
+                </div>
+                {ad.producer?.id ? (
+                  <Link to={`/producteurs/${ad.producer.id}`} className="ghost">
+                    Voir la page du producteur
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {visibleCount < filteredCount ? (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setVisibleCount((count) => count + adsPerPage)}
+            >
+              Afficher 30 annonces supplémentaires
+            </button>
+          ) : null}
+        </>
       )}
       <ReportDialog
         isOpen={isReportOpen}

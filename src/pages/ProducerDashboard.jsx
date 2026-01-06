@@ -624,6 +624,7 @@ function ProducerDashboard() {
                 Description de l'exploitation
                 <textarea
                   rows="3"
+                  maxLength={450}
                   value={profileForm.description}
                   onChange={(event) => handleProfileChange('description', event.target.value)}
                   placeholder="Expliquez votre élevage, vos pratiques..."
@@ -805,6 +806,7 @@ function ProducerDashboard() {
             Description
             <textarea
               rows="3"
+              maxLength={450}
               value={adForm.description}
               onChange={(event) => handleAdChange('description', event.target.value)}
               placeholder="Décrivez votre lot, la quantité, la période, etc."
