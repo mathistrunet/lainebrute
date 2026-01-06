@@ -42,7 +42,11 @@ const decodeTokenPayload = (token) => {
       return null;
     }
     const normalizedSegment = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const payload = JSON.parse(decoder(normalizedSegment));
+    const paddedSegment = normalizedSegment.padEnd(
+      normalizedSegment.length + ((4 - (normalizedSegment.length % 4)) % 4),
+      '='
+    );
+    const payload = JSON.parse(decoder(paddedSegment));
     if (payload.exp && payload.exp * 1000 < Date.now()) {
       storeToken(null);
       return null;
