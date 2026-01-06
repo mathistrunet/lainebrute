@@ -133,6 +133,7 @@ function ReportDialog({ isOpen, onClose, context, defaultCategory = 'ad' }) {
             Motif du signalement
             <textarea
               rows="4"
+              maxLength={450}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="Décrivez le problème ou votre demande..."

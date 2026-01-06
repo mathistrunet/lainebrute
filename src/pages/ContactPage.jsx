@@ -82,6 +82,7 @@ function ContactPage() {
               required
               name="message"
               rows="6"
+              maxLength={450}
               value={formData.message}
               onChange={handleChange}
               placeholder="Décrivez votre demande avec le plus de détails possible"

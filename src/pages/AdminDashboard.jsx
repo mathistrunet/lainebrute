@@ -535,6 +535,7 @@ function AdminDashboard() {
                   <td>
                     <textarea
                       rows={2}
+                      maxLength={450}
                       value={edit.description ?? ''}
                       onChange={(event) =>
                         handleProducerEdit(producer.id, 'description', event.target.value)
@@ -747,6 +748,7 @@ function AdminDashboard() {
                   <td>
                     <textarea
                       rows={2}
+                      maxLength={450}
                       value={edit.description ?? ''}
                       onChange={(event) =>
                         handleOfferEdit(offer.id, 'description', event.target.value)
