@@ -21,11 +21,7 @@ npm run dev   # lance http://localhost:5173
 
 Configurez vos variables d'environnement à partir de `backend/.env.example` (pour `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET`) et `frontend/.env` si vous souhaitez surcharger `VITE_API_URL`.
 
-Des comptes de démonstration sont pré-créés lors du premier lancement de l'API :
-
-- Acheteur : `mathtrunet100@gmail.com` / `mathtrunet100`
-- Producteur : `mathtrunet101@gmail.com` / `mathtrunet101`
-- Administrateur : `mathtrunet102@gmail.com` / `mathtrunet102`
+En production, ne conservez aucun compte de démonstration et fournissez un `JWT_SECRET` robuste.
 
 ## Communication front ↔ back
 

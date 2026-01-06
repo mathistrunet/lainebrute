@@ -6,6 +6,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const db = require('./db');
 
@@ -15,12 +17,22 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || `http://localhost:${PORT}`;
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const JWT_SECRET =
+  process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-insecure-secret');
 const EMAIL_FROM = process.env.EMAIL_FROM || 'no-reply@example.com';
 const PASSWORD_RESET_URL = process.env.PASSWORD_RESET_URL || FRONTEND_ORIGIN;
+const EMAIL_VERIFICATION_URL = process.env.EMAIL_VERIFICATION_URL || BACKEND_BASE_URL;
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || process.env.SMTP_USER || 'mathtrunet102@gmail.com';
 const CONTACT_EMAIL_TO = process.env.CONTACT_EMAIL_TO || REPORT_EMAIL_TO;
 
+if (process.env.NODE_ENV === 'production') {
+  if (!JWT_SECRET || JWT_SECRET === 'change-me-in-production' || JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET doit être défini avec une valeur robuste (>= 32 caractères).');
+  }
+}
+
+app.set('trust proxy', 1);
+app.use(helmet());
 app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.set('etag', false);
@@ -37,7 +49,13 @@ const insertUserStmt = db.prepare('INSERT INTO users (email, password_hash, role
 const updateUserResetTokenStmt = db.prepare(
   'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?'
 );
+const updateUserVerificationTokenStmt = db.prepare(
+  'UPDATE users SET verification_token = ?, verification_token_expires_at = ? WHERE id = ?'
+);
 const findUserByResetTokenStmt = db.prepare('SELECT * FROM users WHERE password_reset_token = ?');
+const findUserByVerificationTokenStmt = db.prepare(
+  'SELECT * FROM users WHERE verification_token = ?'
+);
 const verifyUserStmt = db.prepare(
   'UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?'
 );
@@ -231,12 +249,28 @@ const offersByDayStmt = db.prepare(`
 `);
 
 const EMAIL_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
+const MIN_PASSWORD_LENGTH = 10;
 
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
 const buildPasswordResetLink = (token) => {
   const baseUrl = PASSWORD_RESET_URL.replace(/\/$/, '');
   return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+};
+
+const buildVerificationLink = (token) => {
+  const baseUrl = EMAIL_VERIFICATION_URL.replace(/\/$/, '');
+  return `${baseUrl}/api/verify-email?token=${encodeURIComponent(token)}`;
+};
+
+const isPasswordStrong = (password) => {
+  const normalized = String(password || '');
+  if (normalized.length < MIN_PASSWORD_LENGTH) {
+    return false;
+  }
+  const hasLetter = /[A-Za-z]/.test(normalized);
+  const hasNumber = /[0-9]/.test(normalized);
+  return hasLetter && hasNumber;
 };
 
 // Centralise la lecture de la configuration SMTP depuis les variables d'environnement.
@@ -295,6 +329,24 @@ const sendPasswordSetupEmail = async (recipient, resetUrl) => {
   const text = `Bienvenue ! Créez votre mot de passe en cliquant sur ce lien (valide 24h) : ${resetUrl}`;
   const html = `
       <p>Bienvenue ! Créez votre mot de passe en cliquant sur ce lien (valide 24h) :</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+    `;
+  return sendEmail({ recipient, subject, text, html });
+};
+
+const sendRegistrationEmail = async (recipient, verificationUrl, resetUrl) => {
+  const subject = 'Bienvenue sur Laine Brute : vérifiez votre email';
+  const text = [
+    'Bienvenue sur Laine Brute !',
+    '',
+    `Vérifiez votre adresse email (valide 24h) : ${verificationUrl}`,
+    `Créez ensuite votre mot de passe (valide 24h) : ${resetUrl}`,
+  ].join('\n');
+  const html = `
+      <p>Bienvenue sur Laine Brute !</p>
+      <p>Vérifiez votre adresse email (valide 24h) :</p>
+      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
+      <p>Créez ensuite votre mot de passe (valide 24h) :</p>
       <p><a href="${resetUrl}">${resetUrl}</a></p>
     `;
   return sendEmail({ recipient, subject, text, html });
@@ -398,6 +450,7 @@ const sendOfferExpirationNoticeEmail = async ({ recipient, title, expiresAt }) =
 };
 
 const escapeIdentifier = (identifier) => identifier.replace(/"/g, '""');
+const quoteIdentifier = (identifier) => `"${escapeIdentifier(identifier)}"`;
 
 const processOfferExpirations = async () => {
   const noticeCandidates = selectOffersForExpirationNoticeStmt.all();
@@ -548,37 +601,61 @@ const requireAdmin = requireRole('admin');
 const generateToken = (user) =>
   jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+const emailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+const writeLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 50,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ data: { status: 'ok', timestamp: new Date().toISOString() } });
 });
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { email, role = 'producer' } = req.body ?? {};
     if (!email) {
       return res.status(400).json({ error: 'Email requis.' });
     }
-    if (!['producer', 'admin', 'buyer'].includes(role)) {
+    if (!['producer', 'buyer'].includes(role)) {
       return res.status(400).json({ error: 'Rôle invalide.' });
     }
 
-    const existingUser = findUserByEmailStmt.get(email);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existingUser = findUserByEmailStmt.get(normalizedEmail);
     if (existingUser) {
       return res.status(400).json({ error: 'Email déjà utilisé.' });
     }
 
     const temporaryPassword = crypto.randomBytes(24).toString('hex');
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-    const result = insertUserStmt.run(email, passwordHash, role);
-    verifyUserStmt.run(result.lastInsertRowid);
+    const result = insertUserStmt.run(normalizedEmail, passwordHash, role);
     const resetToken = generateVerificationToken();
     const expiresAt = new Date(Date.now() + EMAIL_TOKEN_TTL_MS).toISOString();
     updateUserResetTokenStmt.run(resetToken, expiresAt, result.lastInsertRowid);
+    const verificationToken = generateVerificationToken();
+    updateUserVerificationTokenStmt.run(verificationToken, expiresAt, result.lastInsertRowid);
     const resetUrl = buildPasswordResetLink(resetToken);
+    const verificationUrl = buildVerificationLink(verificationToken);
     let emailDelivery = null;
 
     try {
-      emailDelivery = await sendPasswordSetupEmail(email, resetUrl);
+      emailDelivery = await sendRegistrationEmail(normalizedEmail, verificationUrl, resetUrl);
     } catch (sendError) {
       console.error('Erreur envoi email de création mot de passe', sendError);
       deleteUserByIdStmt.run(result.lastInsertRowid);
@@ -598,7 +675,7 @@ app.post('/api/register', async (req, res) => {
     res
       .status(201)
       .json({
-        data: { id: result.lastInsertRowid, email, role, emailVerified: true, emailDelivery },
+        data: { id: result.lastInsertRowid, email: normalizedEmail, role, emailVerified: false, emailDelivery },
       });
   } catch (error) {
     console.error('Erreur register', error);
@@ -606,20 +683,21 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/password-reset', async (req, res) => {
+app.post('/api/password-reset', emailLimiter, async (req, res) => {
   try {
     const { email } = req.body ?? {};
     if (!email) {
       return res.status(400).json({ error: 'Adresse email requise.' });
     }
 
-    const user = findUserByEmailStmt.get(email);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = findUserByEmailStmt.get(normalizedEmail);
     if (!user) {
       return res.json({
         data: {
           emailDelivery: {
             sent: false,
-            to: email,
+            to: normalizedEmail,
             error: "Aucun compte associé à cette adresse.",
           },
         },
@@ -634,12 +712,12 @@ app.post('/api/password-reset', async (req, res) => {
     let emailDelivery = null;
 
     try {
-      emailDelivery = await sendPasswordResetEmail(email, resetUrl);
+      emailDelivery = await sendPasswordResetEmail(normalizedEmail, resetUrl);
     } catch (sendError) {
       console.error('Erreur envoi email de réinitialisation', sendError);
       emailDelivery = {
         sent: false,
-        to: email,
+        to: normalizedEmail,
         error: sendError?.message || "Impossible d'envoyer l'email de réinitialisation.",
       };
       return res.status(500).json({
@@ -655,15 +733,17 @@ app.post('/api/password-reset', async (req, res) => {
   }
 });
 
-app.post('/api/password-reset/confirm', async (req, res) => {
+app.post('/api/password-reset/confirm', authLimiter, async (req, res) => {
   try {
     const { token, password } = req.body ?? {};
     if (!token || !password) {
       return res.status(400).json({ error: 'Token et mot de passe requis.' });
     }
 
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' });
+    if (!isPasswordStrong(password)) {
+      return res.status(400).json({
+        error: `Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères, avec des lettres et des chiffres.`,
+      });
     }
 
     const user = findUserByResetTokenStmt.get(token);
@@ -686,7 +766,7 @@ app.post('/api/password-reset/confirm', async (req, res) => {
   }
 });
 
-app.post('/api/reports', async (req, res) => {
+app.post('/api/reports', writeLimiter, async (req, res) => {
   try {
     const { category, reason, contactEmail = null, target = null, documents = [] } = req.body ?? {};
 
@@ -717,7 +797,7 @@ app.post('/api/reports', async (req, res) => {
   }
 });
 
-app.post('/api/contact', async (req, res) => {
+app.post('/api/contact', writeLimiter, async (req, res) => {
   try {
     const { name, email, subject, message } = req.body ?? {};
 
@@ -748,14 +828,15 @@ app.post('/api/contact', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body ?? {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis.' });
     }
 
-    const user = findUserByEmailStmt.get(email);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = findUserByEmailStmt.get(normalizedEmail);
     if (!user) {
       return res.status(400).json({ error: 'Identifiants incorrects.' });
     }
@@ -769,8 +850,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ error: 'Compte interdit.' });
     }
 
-    if (!user.email_verified) {
-      verifyUserStmt.run(user.id);
+    if (!user.email_verified && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Veuillez vérifier votre adresse email.' });
     }
 
     const token = generateToken(user);
@@ -778,6 +859,31 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error('Erreur login', error);
     res.status(500).json({ error: 'Impossible de se connecter.' });
+  }
+});
+
+app.get('/api/verify-email', emailLimiter, async (req, res) => {
+  try {
+    const token = req.query.token || req.body?.token;
+    if (!token) {
+      return res.status(400).json({ error: 'Token requis.' });
+    }
+
+    const user = findUserByVerificationTokenStmt.get(token);
+    if (!user || !user.verification_token_expires_at) {
+      return res.status(400).json({ error: 'Lien de vérification invalide.' });
+    }
+
+    const expiresAt = new Date(user.verification_token_expires_at).getTime();
+    if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
+      return res.status(400).json({ error: 'Lien de vérification expiré.' });
+    }
+
+    verifyUserStmt.run(user.id);
+    return res.json({ data: { message: 'Adresse email vérifiée.' } });
+  } catch (error) {
+    console.error('Erreur verification email', error);
+    return res.status(500).json({ error: "Impossible de vérifier l'email." });
   }
 });
 
@@ -1238,15 +1344,32 @@ app.get('/api/admin/database', authenticateToken, requireAdmin, (req, res) => {
   try {
     const parsedLimit = Number(req.query.limit);
     const limit = Number.isFinite(parsedLimit) && parsedLimit >= 0 ? Math.min(parsedLimit, 1000) : 200;
+    const sensitiveColumns = new Set([
+      'password_hash',
+      'password_reset_token',
+      'password_reset_token_expires_at',
+      'verification_token',
+      'verification_token_expires_at',
+    ]);
 
     const tables = listTablesStmt.all().map(({ name }) => {
       const safeName = escapeIdentifier(name);
       const columnsInfo = db.prepare(`PRAGMA table_info("${safeName}")`).all();
       const columns = columnsInfo.map((column) => column.name);
+      const visibleColumns = columns.filter((column) => !sensitiveColumns.has(column));
       const rowCount = db.prepare(`SELECT COUNT(*) AS count FROM "${safeName}"`).get().count;
+      const columnList = visibleColumns.map((column) => quoteIdentifier(column)).join(', ');
       const rows =
-        limit === 0 ? [] : db.prepare(`SELECT * FROM "${safeName}" LIMIT ?`).all(limit);
-      return { name, columns, rows, rowCount, truncated: limit > 0 && rowCount > rows.length };
+        limit === 0 || visibleColumns.length === 0
+          ? []
+          : db.prepare(`SELECT ${columnList} FROM "${safeName}" LIMIT ?`).all(limit);
+      return {
+        name,
+        columns: visibleColumns,
+        rows,
+        rowCount,
+        truncated: limit > 0 && rowCount > rows.length,
+      };
     });
     res.json({ data: tables });
   } catch (error) {

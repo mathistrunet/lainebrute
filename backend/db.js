@@ -101,16 +101,28 @@ const createTables = () => {
 };
 
 const seedDatabase = () => {
+  const shouldSeedAdmin = String(process.env.ALLOW_SEED_ADMIN || '').toLowerCase() === 'true';
+  if (!shouldSeedAdmin) {
+    return;
+  }
+
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount > 0) {
     return;
   }
 
-  const adminPasswordHash = bcrypt.hashSync('mathtrunet102', 10);
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error('ADMIN_EMAIL et ADMIN_PASSWORD doivent être définis pour créer un admin initial.');
+  }
+
+  const adminPasswordHash = bcrypt.hashSync(adminPassword, 12);
   const insertVerifiedUser = db.prepare(
     'INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, 1)'
   );
-  insertVerifiedUser.run('mathtrunet102@gmail.com', adminPasswordHash, 'admin');
+  insertVerifiedUser.run(adminEmail, adminPasswordHash, 'admin');
 };
 
 const ensureOfferOwners = () => {
@@ -128,15 +140,15 @@ const ensureOfferOwners = () => {
   fillOwnerStmt.run();
 };
 
-const disableEmailVerification = () => {
+const markAdminsVerified = () => {
   db.prepare(
-    'UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL'
+    "UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires_at = NULL WHERE role = 'admin'"
   ).run();
 };
 
 createTables();
 ensureOfferOwners();
-disableEmailVerification();
+markAdminsVerified();
 seedDatabase();
 
 module.exports = db;
