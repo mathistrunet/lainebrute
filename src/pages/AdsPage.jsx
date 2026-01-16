@@ -325,40 +325,66 @@ function AdsPage() {
           </p>
           <ul className="card-list">
             {visibleAds.map((ad) => (
-              <li key={ad.id} className="card">
-                <div className="eyebrow">Annonce producteur</div>
-                <h2>{ad.title}</h2>
-                <p>{ad.description || 'Pas de description fournie.'}</p>
-                <p>Disponibilité : {formatDate(ad.availability_date)}</p>
-                <p>
-                  Quantité :{' '}
-                  {ad.quantity_kg !== null && ad.quantity_kg !== undefined
-                    ? `${ad.quantity_kg} kg`
-                    : 'Non renseignée'}
-                </p>
-                <p>
-                  Zone de livraison :{' '}
-                  {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
-                    ? `${ad.delivery_radius_km} km`
-                    : 'Non renseignée'}
-                </p>
-                <p>Race : {ad.sheep_breed || 'Non renseignée'}</p>
-                <p>Publié le : {formatDate(ad.created_at)}</p>
-                <p>
-                  Producteur : {ad.producer?.name ?? 'Producteur'} —{' '}
-                  {ad.producer?.city ?? ad.city ?? 'Ville inconnue'}
-                  {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
-                </p>
-                <div className="card__actions">
+              <li key={ad.id} className="card ad-card">
+                <div className="ad-card__media">
+                  {ad.photo_url ? (
+                    <img src={ad.photo_url} alt={ad.title} loading="lazy" />
+                  ) : (
+                    <span className="ad-card__placeholder">Photo à venir</span>
+                  )}
+                </div>
+                <div className="ad-card__content">
+                  <div className="eyebrow">Annonce producteur</div>
+                  <div className="ad-card__header">
+                    <h2>{ad.title}</h2>
+                    <span className="ad-card__published">Publié le {formatDate(ad.created_at)}</span>
+                  </div>
+                  <p className="ad-card__description">{ad.description || 'Pas de description fournie.'}</p>
+                  <dl className="ad-card__details">
+                    <div>
+                      <dt>Disponibilité</dt>
+                      <dd>{formatDate(ad.availability_date)}</dd>
+                    </div>
+                    <div>
+                      <dt>Quantité</dt>
+                      <dd>
+                        {ad.quantity_kg !== null && ad.quantity_kg !== undefined
+                          ? `${ad.quantity_kg} kg`
+                          : 'Non renseignée'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Zone de livraison</dt>
+                      <dd>
+                        {ad.delivery_radius_km !== null && ad.delivery_radius_km !== undefined
+                          ? `${ad.delivery_radius_km} km`
+                          : 'Non renseignée'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Race</dt>
+                      <dd>{ad.sheep_breed || 'Non renseignée'}</dd>
+                    </div>
+                    <div>
+                      <dt>Producteur</dt>
+                      <dd>
+                        {ad.producer?.name ?? 'Producteur'} —{' '}
+                        {ad.producer?.city ?? ad.city ?? 'Ville inconnue'}
+                        {typeof ad.distanceKm === 'number' ? ` (${ad.distanceKm} km)` : ''}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+                <div className="ad-card__actions">
                   <button type="button" className="ghost" onClick={() => openReportDialog(ad)}>
                     Signaler
                   </button>
+                  {ad.producer?.id ? (
+                    <Link to={`/producteurs/${ad.producer.id}`} className="ghost">
+                      Voir la page du producteur
+                    </Link>
+                  ) : null}
                 </div>
-                {ad.producer?.id ? (
-                  <Link to={`/producteurs/${ad.producer.id}`} className="ghost">
-                    Voir la page du producteur
-                  </Link>
-                ) : null}
               </li>
             ))}
           </ul>
