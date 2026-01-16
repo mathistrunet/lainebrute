@@ -64,17 +64,12 @@ function MapPage() {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [activeProducerId, setActiveProducerId] = useState(null);
-  const [highlightedProducerId, setHighlightedProducerId] = useState(null);
-  const [isNavOpen, setIsNavOpen] = useState(true);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [userLocation, setUserLocation] = useState(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
   const [reportDefaultCategory, setReportDefaultCategory] = useState('producer');
   const [offerProducerIds, setOfferProducerIds] = useState(() => new Set());
-  const highlightTimeoutRef = useRef(null);
-  const itemRefs = useRef(new Map());
 
   useEffect(() => {
     if (!mapContainerRef.current) return undefined;
@@ -176,35 +171,13 @@ function MapPage() {
     [producers, offerProducerIds]
   );
 
-  useEffect(
-    () => () => {
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
-      }
-    },
-    []
-  );
-
-  const triggerHighlight = useCallback((producerId) => {
-    if (!producerId) return;
-    setHighlightedProducerId(producerId);
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-    }
-    highlightTimeoutRef.current = setTimeout(() => {
-      setHighlightedProducerId(null);
-    }, 1600);
-  }, []);
-
   const focusOnProducer = useCallback(
     (producer) => {
       if (!producer || !mapRef.current) return;
       setActiveProducerId(producer.id);
-      setIsDetailOpen(true);
-      triggerHighlight(producer.id);
       mapRef.current.flyTo([producer.lat, producer.lng], 9);
     },
-    [triggerHighlight]
+    []
   );
 
   useEffect(() => {
@@ -247,23 +220,6 @@ function MapPage() {
     setIsReportOpen(true);
   };
 
-  const registerItemRef = useCallback((id) => (node) => {
-    if (!itemRefs.current) return;
-    if (node) {
-      itemRefs.current.set(id, node);
-    } else {
-      itemRefs.current.delete(id);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeProducerId) return;
-    const node = itemRefs.current.get(activeProducerId);
-    if (node) {
-      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [activeProducerId]);
-
   const handleCitySelect = (city) => {
     setSearchValue(city.label);
     if (city.lat && city.lng && mapRef.current) {
@@ -302,10 +258,6 @@ function MapPage() {
     <section className="map-page">
       <div className="map-page__header">
         <h1>Carte interactive des producteurs</h1>
-        <p>
-          Visualisez les producteurs de laine brute partout en France, explorez leurs lots et
-          localisez vos partenaires en un clic.
-        </p>
         <div className="map-page__search">
           <CityAutocomplete
             value={searchValue}
@@ -318,23 +270,8 @@ function MapPage() {
 
       <div className="map-shell">
         <div className="map-layout">
-          <aside
-            id="navigation-panel"
-            className={`map-nav-panel ${isNavOpen ? 'is-open' : ''}`}
-          >
-            <div className="map-nav-panel__header">
-              <div>
-                <p className="eyebrow">Navigation</p>
-                <h2>Se déplacer sur la carte</h2>
-                <p className="muted">
-                  Glissez pour vous déplacer, utilisez la molette pour zoomer et survolez un point
-                  pour afficher les détails d&apos;un producteur.
-                </p>
-              </div>
-              <button type="button" className="ghost" onClick={() => setIsNavOpen(false)}>
-                Fermer
-              </button>
-            </div>
+          <div ref={mapContainerRef} className="map-canvas" aria-label="Carte des producteurs" />
+          <aside className="map-info-panel" aria-label="Actions et fiche producteur">
             <div className="map-shell__actions">
               <button type="button" className="ghost" onClick={handleUserRecenter}>
                 Recentrer sur ma position
@@ -343,80 +280,7 @@ function MapPage() {
                 Afficher tous les producteurs
               </button>
             </div>
-            <div className="map-nav-panel__list">
-              <p className="eyebrow">Producteurs</p>
-              <ul className="card-list card-list--compact">
-                {markers.map((producer) => (
-                  <li
-                    key={producer.id}
-                    ref={registerItemRef(producer.id)}
-                    className={`card card--compact ${
-                      producer.id === activeProducerId ? 'is-active' : ''
-                    } ${producer.id === highlightedProducerId ? 'is-highlighted' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="card__link"
-                      onClick={() => handleLocate(producer)}
-                    >
-                      <div>
-                        <strong>{producer.name}</strong>
-                        {producer.city && <p className="muted">{producer.city}</p>}
-                      </div>
-                      <span className="card__chevron">Voir</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </aside>
-
-          <div ref={mapContainerRef} className="map-canvas" aria-label="Carte des producteurs" />
-          <button
-            type="button"
-            className="map-panel-toggle map-panel-toggle--left"
-            onClick={() => setIsNavOpen((open) => !open)}
-            aria-expanded={isNavOpen}
-            aria-controls="navigation-panel"
-          >
-            {isNavOpen ? 'Masquer la navigation' : 'Navigation'}
-          </button>
-          <button
-            type="button"
-            className="map-panel-toggle map-panel-toggle--right"
-            onClick={() => setIsDetailOpen((open) => !open)}
-            aria-expanded={isDetailOpen}
-            aria-controls="producer-panel"
-          >
-            {isDetailOpen ? 'Masquer la fiche' : 'Fiche producteur'}
-          </button>
-          <div className="map-legend">
-            <p className="eyebrow">Statut des producteurs</p>
-            <ul>
-              <li><span className="dot" /> Producteur</li>
-              <li><span className="dot dot--has-ads" /> Producteur avec annonces</li>
-            </ul>
-            {status === 'loading' && <small className="muted">Chargement des producteurs...</small>}
-            {error && <small className="error">{error}</small>}
-          </div>
-          <aside
-            id="producer-panel"
-            className={`map-detail-panel ${isDetailOpen ? 'is-open' : ''}`}
-            aria-label="Fiche producteur"
-          >
-            <div className="map-detail-panel__header">
-              <div>
-                <p className="eyebrow">Fiche producteur</p>
-                <h2>Détails du producteur</h2>
-                <p className="muted">
-                  Sélectionnez un point sur la carte pour afficher sa fiche de présentation.
-                </p>
-              </div>
-              <button type="button" className="ghost" onClick={() => setIsDetailOpen(false)}>
-                Fermer
-              </button>
-            </div>
-            {activeProducer ? (
+            {activeProducer && (
               <div className="producer-detail-card">
                 <button
                   type="button"
@@ -427,7 +291,7 @@ function MapPage() {
                 >
                   ⚑
                 </button>
-                <p className="eyebrow">Producteur</p>
+                <p className="eyebrow">Fiche producteur</p>
                 <h3>{activeProducer.name}</h3>
                 {activeProducer.city && <p className="muted">{activeProducer.city}</p>}
                 {activeProducer.quantity && <p>{activeProducer.quantity}</p>}
@@ -438,19 +302,26 @@ function MapPage() {
                   {activeProducer.status && <span className="badge">{activeProducer.status}</span>}
                 </div>
                 <div className="producer-detail-card__actions">
-                  <button type="button" className="ghost" onClick={() => handleLocate(activeProducer)}>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => handleLocate(activeProducer)}
+                  >
                     Recentrer
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="producer-detail-card producer-detail-card--empty">
-                <p className="muted">
-                  Cliquez sur un producteur pour afficher ses informations.
-                </p>
-              </div>
             )}
           </aside>
+          <div className="map-legend">
+            <p className="eyebrow">Statut des producteurs</p>
+            <ul>
+              <li><span className="dot" /> Producteur</li>
+              <li><span className="dot dot--has-ads" /> Producteur avec annonces</li>
+            </ul>
+            {status === 'loading' && <small className="muted">Chargement des producteurs...</small>}
+            {error && <small className="error">{error}</small>}
+          </div>
         </div>
       </div>
       <ReportDialog
