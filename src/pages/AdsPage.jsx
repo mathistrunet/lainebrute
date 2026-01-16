@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReportDialog from '../components/ReportDialog.jsx';
+import CityAutocomplete from '../components/CityAutocomplete.jsx';
 import { api } from '../api.js';
 
 const formatDate = (value) => {
@@ -37,19 +38,68 @@ const calculateDistanceKm = (from, to) => {
   return Math.round(earthRadiusKm * c);
 };
 
+const normalizeDepartment = (department) => {
+  if (!department?.code || !department?.nom) {
+    return null;
+  }
+  return {
+    code: department.code,
+    name: department.nom,
+    label: `${department.code} - ${department.nom}`,
+  };
+};
+
+const getDepartmentKey = (ad) => {
+  const lat = ad.producer?.lat;
+  const lng = ad.producer?.lng;
+  if (typeof lat === 'number' && typeof lng === 'number') {
+    return `coords:${lat.toFixed(4)},${lng.toFixed(4)}`;
+  }
+  const city = ad.city || ad.producer?.city;
+  if (city) {
+    return `city:${city.trim().toLowerCase()}`;
+  }
+  return null;
+};
+
+const fetchDepartmentForAd = async ({ lat, lng, city }) => {
+  let url = '';
+  if (typeof lat === 'number' && typeof lng === 'number') {
+    url = `https://geo.api.gouv.fr/communes?lat=${lat}&lon=${lng}&fields=departement&format=json&limit=1`;
+  } else if (city) {
+    const query = encodeURIComponent(city.trim());
+    url = `https://geo.api.gouv.fr/communes?nom=${query}&fields=departement&limit=1&boost=population`;
+  }
+  if (!url) {
+    return null;
+  }
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return normalizeDepartment(data?.[0]?.departement);
+  } catch (error) {
+    return null;
+  }
+};
+
 function AdsPage() {
   const adsPerPage = 30;
   const [ads, setAds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [sortBy, setSortBy] = useState('date');
-  const [cityFilter, setCityFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [breedFilter, setBreedFilter] = useState('');
   const [minQuantity, setMinQuantity] = useState('');
   const [availabilityStart, setAvailabilityStart] = useState('');
   const [availabilityEnd, setAvailabilityEnd] = useState('');
   const [distanceMax, setDistanceMax] = useState('');
   const [referenceCity, setReferenceCity] = useState('');
+  const [referenceLocation, setReferenceLocation] = useState(null);
+  const [departmentLookup, setDepartmentLookup] = useState({});
   const [locationError, setLocationError] = useState('');
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
@@ -78,36 +128,76 @@ function AdsPage() {
     };
   }, []);
 
-  const availableCities = useMemo(
-    () => ['', ...new Set(ads.map((ad) => ad.city || ad.producer?.city).filter(Boolean))],
-    [ads]
-  );
-
   const availableBreeds = useMemo(
     () => ['', ...new Set(ads.map((ad) => ad.sheep_breed).filter(Boolean))],
     [ads]
   );
 
-  const cityLocations = useMemo(() => {
-    const locations = new Map();
+  useEffect(() => {
+    let isMounted = true;
+    const pending = [];
+    const seenKeys = new Set();
     ads.forEach((ad) => {
-      const city = ad.city || ad.producer?.city;
-      const lat = ad.producer?.lat;
-      const lng = ad.producer?.lng;
-      if (!city || typeof lat !== 'number' || typeof lng !== 'number') {
+      const key = getDepartmentKey(ad);
+      if (!key || departmentLookup[key] || seenKeys.has(key)) {
         return;
       }
-      if (!locations.has(city)) {
-        locations.set(city, { lat, lng });
-      }
+      seenKeys.add(key);
+      pending.push({
+        key,
+        lat: ad.producer?.lat,
+        lng: ad.producer?.lng,
+        city: ad.city || ad.producer?.city,
+      });
     });
-    return locations;
-  }, [ads]);
+    if (pending.length === 0) {
+      return undefined;
+    }
+    Promise.all(
+      pending.map(async (entry) => ({
+        key: entry.key,
+        department: await fetchDepartmentForAd(entry),
+      }))
+    ).then((results) => {
+      if (!isMounted) return;
+      setDepartmentLookup((prev) => {
+        const next = { ...prev };
+        results.forEach(({ key, department }) => {
+          if (department) {
+            next[key] = department;
+          }
+        });
+        return next;
+      });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [ads, departmentLookup]);
 
-  const referenceLocation = useMemo(() => {
-    if (!referenceCity) return null;
-    return cityLocations.get(referenceCity.trim()) ?? null;
-  }, [cityLocations, referenceCity]);
+  const adsWithDepartment = useMemo(
+    () =>
+      ads.map((ad) => {
+        const key = getDepartmentKey(ad);
+        const department = key ? departmentLookup[key] : null;
+        return { ...ad, department };
+      }),
+    [ads, departmentLookup]
+  );
+
+  const availableDepartments = useMemo(() => {
+    const departmentsByCode = new Map();
+    adsWithDepartment.forEach((ad) => {
+      if (!ad.department?.code || departmentsByCode.has(ad.department.code)) {
+        return;
+      }
+      departmentsByCode.set(ad.department.code, ad.department);
+    });
+    const sorted = [...departmentsByCode.values()].sort((a, b) =>
+      a.code.localeCompare(b.code, 'fr', { numeric: true })
+    );
+    return [{ code: '', label: 'Tous les départements' }, ...sorted];
+  }, [adsWithDepartment]);
 
   useEffect(() => {
     if (!referenceCity) {
@@ -122,15 +212,15 @@ function AdsPage() {
   }, [referenceCity, referenceLocation]);
 
   const adsWithDistance = useMemo(() => {
-    if (!referenceLocation) return ads;
-    return ads.map((ad) => {
+    if (!referenceLocation) return adsWithDepartment;
+    return adsWithDepartment.map((ad) => {
       const producerLocation = ad.producer?.lat && ad.producer?.lng
         ? { lat: ad.producer.lat, lng: ad.producer.lng }
         : null;
       const distanceKm = calculateDistanceKm(referenceLocation, producerLocation);
       return { ...ad, distanceKm };
     });
-  }, [ads, referenceLocation]);
+  }, [adsWithDepartment, referenceLocation]);
 
   const sortedAndFilteredAds = useMemo(() => {
     const minQuantityValue = minQuantity === '' ? null : Number(minQuantity);
@@ -139,7 +229,7 @@ function AdsPage() {
     const maxDistanceValue = distanceMax === '' ? null : Number(distanceMax);
 
     const filtered = adsWithDistance.filter((ad) => {
-      if (cityFilter && !(ad.city === cityFilter || ad.producer?.city === cityFilter)) {
+      if (departmentFilter && ad.department?.code !== departmentFilter) {
         return false;
       }
       if (breedFilter && ad.sheep_breed !== breedFilter) {
@@ -176,7 +266,7 @@ function AdsPage() {
     availabilityEnd,
     availabilityStart,
     breedFilter,
-    cityFilter,
+    departmentFilter,
     distanceMax,
     minQuantity,
     sortBy,
@@ -191,7 +281,7 @@ function AdsPage() {
     availabilityEnd,
     availabilityStart,
     breedFilter,
-    cityFilter,
+    departmentFilter,
     distanceMax,
     minQuantity,
     referenceCity,
@@ -224,92 +314,101 @@ function AdsPage() {
       </p>
 
       <div className="filters-bar">
-        <label>
-          Trier par
-          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-            <option value="date">Annonces les plus récentes</option>
-            <option value="distance">Distance croissante</option>
-          </select>
-        </label>
-        <label>
-          Ville de référence
-          <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}>
-            {availableCities.map((city) => (
-              <option key={city || 'all'} value={city}>
-                {city || 'Toutes les villes'}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Race de mouton
-          <select value={breedFilter} onChange={(event) => setBreedFilter(event.target.value)}>
-            {availableBreeds.map((breed) => (
-              <option key={breed || 'all-breeds'} value={breed}>
-                {breed || 'Toutes les races'}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Quantité minimale (kg)
-          <input
-            type="number"
-            min="0"
-            step="1"
-            placeholder="Ex : 50"
-            value={minQuantity}
-            onChange={(event) => setMinQuantity(event.target.value)}
-          />
-        </label>
-        <label>
-          Date de disponibilité min
-          <input
-            type="date"
-            value={availabilityStart}
-            onChange={(event) => setAvailabilityStart(event.target.value)}
-          />
-        </label>
-        <label>
-          Date de disponibilité max
-          <input
-            type="date"
-            value={availabilityEnd}
-            onChange={(event) => setAvailabilityEnd(event.target.value)}
-          />
-        </label>
-        <label>
-          Distance maximale (km)
-          <input
-            type="number"
-            min="0"
-            step="1"
-            placeholder="Ex : 120"
-            value={distanceMax}
-            onChange={(event) => setDistanceMax(event.target.value)}
-          />
-        </label>
-        <div className="filters-bar__location">
-          <label htmlFor="reference-city">
-            Ville pour le calcul de distance
+        <div className="filters-bar__group">
+          <label>
+            Trier par
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <option value="date">Annonces les plus récentes</option>
+              <option value="distance">Distance croissante</option>
+            </select>
+          </label>
+          <label>
+            Race de mouton
+            <select value={breedFilter} onChange={(event) => setBreedFilter(event.target.value)}>
+              {availableBreeds.map((breed) => (
+                <option key={breed || 'all-breeds'} value={breed}>
+                  {breed || 'Toutes les races'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Quantité minimale (kg)
             <input
-              id="reference-city"
-              type="text"
-              placeholder="Ex : Toulouse"
-              value={referenceCity}
-              onChange={(event) => setReferenceCity(event.target.value)}
-              list="reference-cities"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Ex : 50"
+              value={minQuantity}
+              onChange={(event) => setMinQuantity(event.target.value)}
             />
           </label>
-          <datalist id="reference-cities">
-            {availableCities.filter(Boolean).map((city) => (
-              <option key={city} value={city} />
-            ))}
-          </datalist>
-          {!referenceLocation && (sortBy === 'distance' || distanceMax !== '') ? (
-            <span className="muted">Renseignez une ville pour trier ou filtrer par distance.</span>
-          ) : null}
-          {locationError ? <span className="error">{locationError}</span> : null}
+          <label>
+            Date de disponibilité min
+            <input
+              type="date"
+              value={availabilityStart}
+              onChange={(event) => setAvailabilityStart(event.target.value)}
+            />
+          </label>
+          <label>
+            Date de disponibilité max
+            <input
+              type="date"
+              value={availabilityEnd}
+              onChange={(event) => setAvailabilityEnd(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="filters-bar__group filters-bar__group--geo">
+          <label>
+            Département de référence
+            <select
+              value={departmentFilter}
+              onChange={(event) => setDepartmentFilter(event.target.value)}
+            >
+              {availableDepartments.map((department) => (
+                <option key={department.code || 'all'} value={department.code}>
+                  {department.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="filters-bar__location">
+            <CityAutocomplete
+              label="Ville de référence pour calculer une distance"
+              name="reference-city"
+              value={referenceCity}
+              placeholder="Ex : Toulouse"
+              onChange={(event) => {
+                setReferenceCity(event.target.value);
+                setReferenceLocation(null);
+              }}
+              onSelect={(selection) => {
+                setReferenceCity(selection.label);
+                if (typeof selection.lat === 'number' && typeof selection.lng === 'number') {
+                  setReferenceLocation({ lat: selection.lat, lng: selection.lng });
+                } else {
+                  setReferenceLocation(null);
+                }
+              }}
+            />
+            {!referenceLocation && (sortBy === 'distance' || distanceMax !== '') ? (
+              <span className="muted">Renseignez une ville pour trier ou filtrer par distance.</span>
+            ) : null}
+            {locationError ? <span className="error">{locationError}</span> : null}
+          </div>
+          <label>
+            Distance maximale (km)
+            <input
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Ex : 120"
+              value={distanceMax}
+              onChange={(event) => setDistanceMax(event.target.value)}
+            />
+          </label>
         </div>
       </div>
 
